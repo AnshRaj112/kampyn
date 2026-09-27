@@ -1,6 +1,1164 @@
 ---
-description: Documentation and architectural-decision guidance
-alwaysApply: false
+description: KAMPYN documentation rules covering code documentation, architecture documentation, APIs, decisions, setup guides, operational knowledge, changelogs, and documentation maintenance.
+alwaysApply: true
 ---
 
-Follow the documentation, public-contract, and architectural-decision rules in `AGENTS.md` and the applicable `.ai/` policies.
+# KAMPYN — Documentation Rules
+
+## 1. Purpose
+
+These rules define how documentation should be created, maintained, and structured across KAMPYN.
+
+Documentation should make the system understandable to:
+
+- new engineers
+- existing maintainers
+- reviewers
+- operators
+- integrators
+- administrators
+- future contributors
+
+Documentation is part of the system's maintainability.
+
+A significant implementation is incomplete when the knowledge required to understand, operate, or safely modify it exists only in the author's memory.
+
+General engineering rules are defined in `AGENTS.md`.
+
+Architecture rules are defined in `01-architecture.mdc`.
+
+Code-quality rules are defined in `02-code-quality.mdc`.
+
+Testing rules are defined in `05-testing.mdc`.
+
+---
+
+# 2. Documentation Principles
+
+Prefer documentation that is:
+
+```text
+accurate
+concise
+discoverable
+structured
+maintainable
+specific
+close to ownership
+```
+
+Avoid documentation that is:
+
+```text
+duplicated
+generic
+obvious
+stale
+implementation-heavy
+detached from the code it describes
+```
+
+Documentation should explain information that is difficult to infer from the code itself.
+
+---
+
+# 3. Documentation Is a Source of Truth
+
+Every important piece of documentation must have a clear ownership boundary.
+
+Before documenting something, determine:
+
+```text
+What does this document own?
+Who maintains it?
+What is its source of truth?
+What other documents depend on it?
+```
+
+Do not create multiple documents that independently describe the same architectural fact.
+
+If two documents disagree, resolve the conflict rather than allowing both versions to remain.
+
+---
+
+# 4. Source of Truth Hierarchy
+
+Follow the repository's established source-of-truth hierarchy.
+
+Generally:
+
+```text
+system / repository requirements
+        ↓
+AGENTS.md
+        ↓
+.ai/ policies
+        ↓
+architecture documentation
+        ↓
+code / schemas / contracts
+        ↓
+local implementation documentation
+```
+
+Do not create documentation that contradicts higher-level project rules.
+
+When documentation describes behavior generated from code or schemas, prefer the actual source definition as authoritative.
+
+---
+
+# 5. Documentation Before Assumption
+
+Before writing documentation about an existing system:
+
+1. Inspect the implementation.
+2. Inspect relevant configuration.
+3. Inspect related tests.
+4. Inspect existing documentation.
+5. Identify the actual source of truth.
+6. Document verified behavior.
+
+Do not document what the system is *supposed* to do if it currently behaves differently unless the discrepancy is explicitly identified.
+
+Do not invent undocumented behavior.
+
+---
+
+# 6. README Files
+
+A README should answer the questions necessary for its scope.
+
+A repository-level README should generally explain:
+
+```text
+what the project is
+why it exists
+major capabilities
+technology overview
+repository structure
+how to get started
+how to run it
+how to test it
+where important documentation lives
+```
+
+A module-level README should focus on that module.
+
+Do not copy the entire root README into every directory.
+
+---
+
+# 7. Getting Started Documentation
+
+Developer onboarding documentation should provide a reliable path from:
+
+```text
+fresh environment
+        ↓
+dependencies
+        ↓
+configuration
+        ↓
+local services
+        ↓
+database setup
+        ↓
+development server
+        ↓
+tests
+        ↓
+successful contribution
+```
+
+Document:
+
+- prerequisites
+- required tooling
+- installation
+- environment configuration
+- required services
+- database setup
+- migrations
+- seed data where applicable
+- development commands
+- test commands
+- common troubleshooting steps
+
+Commands must reflect the actual repository.
+
+Do not document commands that have not been verified when verification is possible.
+
+---
+
+# 8. Environment Configuration
+
+Document required configuration without exposing secrets.
+
+Explain:
+
+```text
+variable name
+purpose
+required / optional
+expected format
+safe example
+environment scope
+```
+
+Never place real credentials in documentation.
+
+Do not include:
+
+```text
+API keys
+passwords
+private keys
+tokens
+production credentials
+```
+
+Use safe placeholders:
+
+```text
+YOUR_VALUE
+example-key
+localhost
+```
+
+where appropriate.
+
+---
+
+# 9. Environment Files
+
+Document which environment files are expected.
+
+For example:
+
+```text
+.env.example
+.env.local
+.env.test
+```
+
+should have clearly defined purposes if the repository uses them.
+
+Do not require developers to guess which environment variables are mandatory.
+
+If configuration is validated by code, keep documentation consistent with that validation.
+
+---
+
+# 10. Architecture Documentation
+
+Architecture documentation should explain:
+
+```text
+system boundaries
+major components
+responsibilities
+data flow
+dependency direction
+communication mechanisms
+deployment boundaries
+important constraints
+```
+
+It should not reproduce every implementation detail.
+
+Architecture documentation should answer:
+
+```text
+Why is the system structured this way?
+Where does this responsibility belong?
+How do major components communicate?
+Where does data originate?
+Which systems are authoritative?
+```
+
+---
+
+# 11. Architecture Diagrams
+
+Use diagrams when relationships are easier to understand visually.
+
+Useful diagrams include:
+
+```text
+system architecture
+service dependencies
+data flow
+request flow
+authentication flow
+deployment architecture
+event flow
+database relationships
+```
+
+A diagram should communicate a meaningful relationship.
+
+Do not create diagrams merely because diagrams look impressive.
+
+Every important architecture diagram should have a clear title and scope.
+
+---
+
+# 12. Diagrams Must Stay Accurate
+
+An architecture diagram that contradicts the implementation is worse than having no diagram.
+
+When changing architecture:
+
+1. Identify affected diagrams.
+2. Update them as part of the change.
+3. Verify labels and relationships.
+4. Remove obsolete diagrams where appropriate.
+
+Do not leave outdated architecture diagrams in the repository.
+
+---
+
+# 13. API Documentation
+
+Public APIs should have discoverable documentation.
+
+Document where appropriate:
+
+```text
+endpoint
+method
+authentication
+authorization
+request parameters
+request body
+response body
+status codes
+validation errors
+business errors
+pagination
+filtering
+sorting
+rate limits
+idempotency
+```
+
+Do not document internal implementation details as part of the public API contract.
+
+---
+
+# 14. API Contracts
+
+API documentation must match the actual contract.
+
+When possible, derive documentation from:
+
+```text
+schemas
+OpenAPI specifications
+typed contracts
+validation definitions
+```
+
+rather than maintaining independent handwritten copies.
+
+If a contract changes, update its documentation in the same change.
+
+---
+
+# 15. Request and Response Examples
+
+Use realistic but safe examples.
+
+Examples should demonstrate:
+
+```text
+normal request
+normal response
+validation failure
+authorization failure
+important edge case
+```
+
+Do not use real personal data, credentials, tokens, or production identifiers.
+
+Examples should remain minimal.
+
+Avoid enormous payload examples when a small representative example communicates the contract.
+
+---
+
+# 16. Database Documentation
+
+Document important database concepts, not every column automatically.
+
+Useful database documentation includes:
+
+```text
+domain ownership
+important entities
+relationships
+constraints
+indexes
+transaction boundaries
+partitioning
+retention
+migration strategy
+data lifecycle
+```
+
+The database schema itself should remain the source of truth for exact structural details where appropriate.
+
+Do not maintain a manually duplicated schema document that will inevitably become stale.
+
+---
+
+# 17. Data Ownership
+
+Document which system is authoritative for important data.
+
+For example:
+
+```text
+Primary database
+      ↓
+authoritative business state
+
+OpenSearch
+      ↓
+derived search projection
+
+Redis
+      ↓
+derived / temporary cached state
+```
+
+The exact architecture must follow the project's current implementation.
+
+Do not allow documentation to imply that a derived system is authoritative when it is not.
+
+---
+
+# 18. Security Documentation
+
+Security-sensitive architecture should be documented where necessary.
+
+Document important:
+
+```text
+authentication flow
+authorization model
+tenant isolation
+secret management
+data classification
+encryption boundaries
+audit requirements
+security-sensitive integrations
+```
+
+Do not document secrets or sensitive operational details that should remain private.
+
+Security documentation should complement `04-security.mdc`, not duplicate it.
+
+---
+
+# 19. Operational Documentation
+
+Operational documentation should explain how to run and maintain the system.
+
+Include where appropriate:
+
+```text
+deployment
+rollback
+health checks
+monitoring
+logging
+alerts
+backups
+restoration
+migrations
+incident response
+dependency failures
+common operational failures
+```
+
+Operational documentation should be written for the engineer who may be responding to a problem under time pressure.
+
+Prefer:
+
+```text
+symptom
+diagnosis
+action
+verification
+rollback / recovery
+```
+
+over long narrative explanations.
+
+---
+
+# 20. Runbooks
+
+Important operational procedures should have runbooks.
+
+A runbook should clearly communicate:
+
+```text
+When to use this
+Prerequisites
+Symptoms
+Checks
+Commands
+Expected results
+Corrective action
+Verification
+Escalation
+Rollback
+```
+
+Do not include destructive commands without explaining their consequences.
+
+Dangerous operations should be clearly identified.
+
+---
+
+# 21. Troubleshooting Documentation
+
+Troubleshooting guides should be based on actual recurring problems.
+
+A useful troubleshooting entry should include:
+
+```text
+Problem
+Likely causes
+How to verify
+Resolution
+How to prevent recurrence
+```
+
+Avoid generic advice such as:
+
+```text
+restart everything
+clear everything
+reinstall dependencies
+```
+
+unless it is actually an appropriate diagnostic or recovery step.
+
+---
+
+# 22. Architecture Decision Records
+
+Significant architectural decisions should be recorded as ADRs when the project uses ADRs.
+
+An ADR should generally capture:
+
+```text
+context
+problem
+decision
+alternatives considered
+trade-offs
+consequences
+status
+```
+
+Document the reasoning behind decisions that future engineers may otherwise reconsider without context.
+
+Do not create ADRs for trivial implementation choices.
+
+---
+
+# 23. Decision Documentation
+
+Document decisions when they have meaningful long-term consequences.
+
+Examples:
+
+```text
+database selection
+service boundaries
+communication patterns
+authentication architecture
+multi-tenancy strategy
+search architecture
+caching strategy
+deployment model
+storage strategy
+major dependency choices
+```
+
+The goal is to preserve reasoning, not record every coding decision.
+
+---
+
+# 24. Feature Documentation
+
+Significant features should have enough documentation for another engineer to understand:
+
+```text
+purpose
+user-facing behavior
+important business rules
+architecture
+dependencies
+failure behavior
+testing
+operational considerations
+```
+
+Do not create a separate document for every small function.
+
+Documentation should match the complexity and importance of the feature.
+
+---
+
+# 25. Business Rules
+
+Important business rules should be documented explicitly when they cannot be safely inferred from code.
+
+Examples may include:
+
+```text
+order state transitions
+booking rules
+cancellation rules
+inventory rules
+payment states
+refund rules
+role restrictions
+tenant policies
+```
+
+Business rules should have a clear owner.
+
+Do not duplicate the same business rule across multiple documents.
+
+---
+
+# 26. State Machines
+
+When a domain contains meaningful state transitions, document them.
+
+For example:
+
+```text
+Created
+   ↓
+Confirmed
+   ↓
+Preparing
+   ↓
+Ready
+   ↓
+Completed
+```
+
+Also document invalid or prohibited transitions where they are important.
+
+State documentation should remain consistent with the actual implementation.
+
+---
+
+# 27. Code Comments
+
+Comments should explain **why**, not merely **what**.
+
+Good reasons for comments include:
+
+```text
+non-obvious constraint
+security requirement
+performance trade-off
+compatibility requirement
+business rule
+unusual algorithm
+temporary workaround
+external-system behavior
+```
+
+Avoid comments that simply translate code into English.
+
+Bad:
+
+```ts
+// increment retry count
+retryCount++;
+```
+
+Good:
+
+```ts
+// Provider retries are capped to prevent duplicate processing during an outage.
+```
+
+---
+
+# 28. Public API Documentation
+
+Exported functions, classes, services, hooks, components, types, and libraries should be documented when their behavior is not self-evident.
+
+Document important:
+
+```text
+purpose
+inputs
+outputs
+side effects
+errors
+constraints
+usage
+```
+
+Do not document obvious syntax or implementation details.
+
+---
+
+# 29. SDK Documentation
+
+KAMPYN SDKs require especially clear documentation because external teams may consume them without access to the implementation.
+
+Document:
+
+```text
+installation
+initialization
+authentication
+configuration
+available modules
+methods
+types
+errors
+retry behavior
+pagination
+webhooks/events
+version compatibility
+examples
+```
+
+Examples should be copy-pasteable where practical.
+
+SDK documentation should not require consumers to understand KAMPYN's internal architecture.
+
+---
+
+# 30. Self-Hosted Deployment Documentation
+
+For universities or organizations self-hosting KAMPYN, documentation should cover:
+
+```text
+system requirements
+supported infrastructure
+configuration
+database setup
+storage
+search
+cache
+secrets
+networking
+TLS
+container images
+deployment
+migrations
+upgrades
+backups
+monitoring
+health checks
+rollback
+```
+
+Separate:
+
+```text
+minimum requirements
+recommended production configuration
+optional components
+```
+
+where applicable.
+
+Do not assume the self-hosted operator has access to internal development infrastructure.
+
+---
+
+# 31. Versioning Documentation
+
+When behavior changes across versions, document compatibility where relevant.
+
+Important changes include:
+
+```text
+breaking API changes
+database migrations
+configuration changes
+SDK changes
+authentication changes
+deployment requirements
+deprecated functionality
+```
+
+Clearly identify:
+
+```text
+added
+changed
+deprecated
+removed
+breaking
+```
+
+when the project's release process uses these categories.
+
+---
+
+# 32. Changelogs
+
+Keep changelogs focused on meaningful externally relevant changes.
+
+Good entries describe:
+
+```text
+what changed
+who is affected
+whether action is required
+```
+
+Avoid changelog entries for every internal refactor.
+
+Do not expose sensitive security details in public changelogs.
+
+Security fixes should follow the project's security disclosure process.
+
+---
+
+# 33. Deprecation Documentation
+
+When functionality is deprecated, document:
+
+```text
+what is deprecated
+why
+replacement
+migration path
+timeline where applicable
+```
+
+Do not silently remove functionality that external consumers depend upon.
+
+For SDKs and APIs, deprecations should be especially explicit.
+
+---
+
+# 34. Documentation and Code Changes
+
+When a code change affects documented behavior, update documentation in the same change whenever practical.
+
+Examples:
+
+```text
+API change
+configuration change
+architecture change
+deployment change
+CLI change
+SDK change
+database migration
+user-facing behavior change
+```
+
+Do not defer documentation indefinitely for significant changes.
+
+---
+
+# 35. Documentation Drift
+
+Documentation drift is a maintenance defect.
+
+When you discover documentation that contradicts the system:
+
+1. Determine the actual source of truth.
+2. Identify the incorrect documentation.
+3. Correct it.
+4. Check for related stale documentation.
+5. Avoid creating another conflicting document.
+
+Do not silently work around incorrect documentation.
+
+---
+
+# 36. Avoid Documentation Duplication
+
+Before creating a document, search for existing documentation.
+
+Ask:
+
+```text
+Does this already exist?
+Can the existing document be updated?
+Is this actually a new concept?
+Who owns this information?
+```
+
+Prefer updating an authoritative document over creating a second document containing similar information.
+
+---
+
+# 37. Documentation Structure
+
+Use predictable organization.
+
+A useful structure is:
+
+```text
+docs/
+├── getting-started/
+├── architecture/
+├── api/
+├── development/
+├── operations/
+├── security/
+├── deployment/
+├── sdk/
+├── adr/
+└── troubleshooting/
+```
+
+The exact repository structure may differ.
+
+Follow the project's existing documentation architecture before introducing a new structure.
+
+---
+
+# 38. Discoverability
+
+Important documentation should be reachable from an obvious entry point.
+
+A new engineer should not need to search the entire repository to discover:
+
+```text
+how to start the project
+how to run tests
+where architecture documentation lives
+how deployment works
+where API contracts live
+where security rules live
+```
+
+Use indexes or documentation navigation where appropriate.
+
+---
+
+# 39. Documentation Naming
+
+Names should communicate scope.
+
+Prefer:
+
+```text
+authentication.md
+deployment.md
+database.md
+troubleshooting.md
+order-lifecycle.md
+multi-tenancy.md
+```
+
+over:
+
+```text
+notes.md
+misc.md
+stuff.md
+new-doc.md
+final.md
+important.md
+```
+
+Avoid dates or version numbers in filenames unless they represent a deliberate archival or versioned document.
+
+---
+
+# 40. Documentation Style
+
+Use consistent:
+
+```text
+headings
+terminology
+code formatting
+command formatting
+tables
+diagrams
+link conventions
+```
+
+Prefer direct language.
+
+Avoid unnecessary corporate language or vague statements such as:
+
+```text
+This component facilitates a robust solution...
+```
+
+Prefer:
+
+```text
+This service validates orders and persists confirmed order state.
+```
+
+---
+
+# 41. Examples
+
+Examples should reflect supported behavior.
+
+Before adding an example:
+
+1. Verify the API or command.
+2. Verify required configuration.
+3. Use safe values.
+4. Keep the example minimal.
+5. Ensure it does not encourage insecure behavior.
+
+Do not provide examples that bypass:
+
+```text
+authentication
+authorization
+validation
+TLS
+tenant isolation
+```
+
+merely to make the example shorter.
+
+---
+
+# 42. Documentation Testing
+
+Documentation containing executable instructions should be treated as testable where practical.
+
+Examples include:
+
+```text
+installation commands
+CLI commands
+API examples
+SDK examples
+configuration examples
+deployment commands
+```
+
+If automated documentation testing exists, use it.
+
+If an example is known to be illustrative rather than executable, make that clear.
+
+---
+
+# 43. Links and References
+
+Internal links should point to stable locations.
+
+When moving documentation:
+
+1. Update references.
+2. Search for old links.
+3. Remove obsolete references.
+4. Verify important navigation paths.
+
+Do not leave broken links in primary documentation.
+
+---
+
+# 44. Documentation Security
+
+Documentation itself can leak sensitive information.
+
+Before committing documentation, verify it does not contain:
+
+```text
+credentials
+tokens
+private keys
+production secrets
+internal passwords
+sensitive personal data
+unnecessary infrastructure details
+```
+
+Use placeholders for sensitive configuration.
+
+Do not copy production logs into documentation without sanitizing them.
+
+---
+
+# 45. Documentation Review
+
+Before finalizing significant documentation, ask:
+
+```text
+Is it accurate?
+Is it still true?
+Who owns it?
+Is the source of truth clear?
+Is it discoverable?
+Does it duplicate another document?
+Does it expose sensitive information?
+Would a new engineer understand it?
+```
+
+For operational documentation:
+
+```text
+Could an engineer safely follow this during an incident?
+```
+
+For public documentation:
+
+```text
+Could an external consumer use this without knowing internal implementation details?
+```
+
+---
+
+# 46. Documentation Quality Gate
+
+Before considering documentation complete:
+
+- [ ] Scope and ownership are clear.
+- [ ] The information is based on verified system behavior.
+- [ ] Existing documentation was searched first.
+- [ ] No unnecessary duplication was introduced.
+- [ ] Terminology matches the codebase.
+- [ ] Examples are accurate.
+- [ ] Commands are valid where verification is possible.
+- [ ] Links are valid.
+- [ ] Secrets and sensitive data are absent.
+- [ ] Architecture diagrams reflect the current system.
+- [ ] API documentation matches actual contracts.
+- [ ] Important code/configuration changes are documented.
+- [ ] Operational instructions are actionable.
+- [ ] The document is discoverable.
+- [ ] The documentation has a clear maintenance owner.
+
+---
+
+# 47. Final Principle
+
+Documentation should preserve knowledge that would otherwise be lost.
+
+The goal is not to document everything.
+
+The goal is to document what another engineer, operator, integrator, or maintainer needs to know to safely understand and work with KAMPYN.
+
+> **Document decisions, not trivia.**  
+> **Document behavior, not obvious syntax.**  
+> **Keep source-of-truth boundaries explicit.**  
+> **Prefer one authoritative document over duplicated explanations.**  
+> **Keep documentation close to ownership.**  
+> **Update documentation when behavior changes.**  
+> **Never document secrets.**  
+> **If documentation and reality disagree, fix the documentation or the implementation—never leave the contradiction unexplained.**
+--- 

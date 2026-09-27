@@ -1,6 +1,1295 @@
 ---
-description: Security and trust-boundary guidance
-alwaysApply: false
+description: KAMPYN security engineering rules covering authentication, authorization, data protection, secrets, APIs, databases, multi-tenancy, dependencies, infrastructure, logging, and secure development.
+alwaysApply: true
 ---
 
-Follow the validation, authorization, secrets, tenant-isolation, and security rules in `AGENTS.md` and the applicable `.ai/` policies.
+# KAMPYN — Security Rules
+
+## 1. Purpose
+
+These rules define the minimum security expectations for KAMPYN production code.
+
+Security must be considered during:
+
+- architecture
+- implementation
+- API design
+- database access
+- authentication
+- authorization
+- frontend development
+- infrastructure
+- logging
+- dependency management
+- testing
+- deployment
+
+Security is not a final review step.
+
+A feature is incomplete if its security boundaries are incomplete.
+
+General engineering rules are defined in `AGENTS.md`.
+
+Architectural boundaries are defined in `01-architecture.mdc` and `.ai/architecture/`.
+
+Code-quality rules are defined in `02-code-quality.mdc`.
+
+Performance rules are defined in `03-performance.mdc`.
+
+---
+
+# 2. Security Principles
+
+Follow these principles:
+
+```text
+least privilege
+secure by default
+deny by default
+explicit trust boundaries
+defense in depth
+validate at boundaries
+minimize sensitive data
+fail safely
+never trust client-controlled authorization
+protect secrets
+audit security-sensitive actions
+```
+
+Do not rely on a single security mechanism when multiple independent controls are practical.
+
+---
+
+# 3. Threat Modeling
+
+Before implementing security-sensitive functionality, identify:
+
+```text
+What is being protected?
+Who can access it?
+Who owns it?
+What is the trust boundary?
+What input is untrusted?
+What happens if authorization fails?
+What happens if a dependency is compromised?
+What data could be exposed?
+What actions must be auditable?
+```
+
+For significant security changes, document relevant threats and mitigations according to the project's security documentation process.
+
+Do not invent elaborate threat models for trivial internal changes.
+
+---
+
+# 4. Trust Boundaries
+
+Treat the following as untrusted unless explicitly verified:
+
+- browser input
+- mobile application input
+- HTTP headers
+- query parameters
+- path parameters
+- request bodies
+- cookies
+- uploaded files
+- webhook payloads
+- external API responses
+- third-party SDK output
+- client-side state
+- values stored in local storage
+- user-controlled metadata
+
+Never assume that because the frontend validates something, the backend can trust it.
+
+The backend must enforce security-sensitive rules independently.
+
+---
+
+# 5. Authentication
+
+Authentication establishes identity.
+
+Authorization establishes permission.
+
+Do not treat authentication as authorization.
+
+Authentication mechanisms must:
+
+- use established cryptographic protocols
+- avoid custom cryptography
+- protect credentials
+- expire credentials appropriately
+- support revocation where required
+- prevent session/token fixation
+- avoid leaking authentication state
+
+Do not implement custom authentication schemes when an established mechanism is appropriate.
+
+---
+
+# 6. Passwords
+
+Passwords must never be stored in plaintext.
+
+Do not:
+
+```text
+encrypt passwords for storage
+store passwords in logs
+return passwords in API responses
+store passwords in client-side state
+send passwords through unnecessary services
+```
+
+Use a password-hashing algorithm appropriate for the project's security requirements.
+
+Password verification should use the project's established authentication implementation.
+
+Do not invent custom password hashing.
+
+---
+
+# 7. Tokens and Sessions
+
+Treat authentication tokens as sensitive credentials.
+
+Do not:
+
+- log access tokens
+- expose refresh tokens unnecessarily
+- place sensitive tokens in URLs
+- return tokens to unrelated services
+- persist tokens in insecure browser storage without explicit architectural justification
+
+For browser authentication, prefer secure cookie-based mechanisms when appropriate.
+
+Security-sensitive cookies should use appropriate:
+
+```text
+Secure
+HttpOnly
+SameSite
+```
+
+settings.
+
+Token lifetime, rotation, revocation, and storage must follow the authentication architecture.
+
+---
+
+# 8. Authorization
+
+Authorization must be enforced on the server.
+
+Never rely on:
+
+```text
+hidden UI elements
+disabled buttons
+frontend route guards
+client-side roles
+client-side permissions
+```
+
+as the actual security boundary.
+
+Every protected operation should verify that the authenticated principal has permission to perform that specific operation.
+
+Prefer explicit authorization policies.
+
+Example:
+
+```text
+authenticated
+    ↓
+tenant membership
+    ↓
+resource ownership / access
+    ↓
+required role or permission
+    ↓
+operation
+```
+
+Do not assume that being authenticated implies access to a resource.
+
+---
+
+# 9. Object-Level Authorization
+
+Every resource identifier supplied by a client must be treated as untrusted.
+
+Avoid insecure patterns such as:
+
+```text
+GET /orders/:orderId
+→ query order by ID
+→ return order
+```
+
+without verifying whether the current principal is allowed to access that order.
+
+Authorization must be tied to the resource's ownership, tenant, role, or permission model.
+
+This applies to:
+
+- orders
+- bookings
+- users
+- documents
+- files
+- messages
+- complaints
+- payments
+- administrative resources
+- reports
+- inventory
+- any other protected resource
+
+---
+
+# 10. Multi-Tenant Security
+
+KAMPYN may operate across multiple universities or institutional tenants.
+
+Tenant isolation is a security boundary.
+
+Every tenant-scoped operation must ensure:
+
+```text
+authenticated principal
+        ↓
+authorized tenant
+        ↓
+tenant-scoped resource
+```
+
+Never trust a client-provided:
+
+```text
+tenantId
+universityId
+organizationId
+campusId
+```
+
+without verifying that the authenticated principal is authorized for it.
+
+Do not allow:
+
+```text
+tenant A → tenant B data access
+tenant A → tenant B cache entries
+tenant A → tenant B search results
+tenant A → tenant B files
+tenant A → tenant B events
+tenant A → tenant B background jobs
+```
+
+Tenant isolation must also be considered in:
+
+- database queries
+- cache keys
+- OpenSearch indexes or filters
+- object storage paths
+- event payloads
+- logs
+- analytics
+- background jobs
+
+---
+
+# 11. Administrative Access
+
+Administrative functionality requires explicit authorization.
+
+Do not treat an administrator role as unrestricted access unless the architecture explicitly defines it that way.
+
+Prefer granular permissions where appropriate:
+
+```text
+orders.read
+orders.manage
+inventory.read
+inventory.manage
+users.read
+users.manage
+reports.read
+```
+
+Avoid scattered checks such as:
+
+```ts
+if (user.role === "admin")
+```
+
+when the system requires more granular authorization.
+
+Security-sensitive administrative actions should be auditable.
+
+---
+
+# 12. Privilege Escalation
+
+Never allow users to grant themselves privileges.
+
+Do not trust client-provided values for:
+
+```text
+role
+permissions
+isAdmin
+tenant membership
+account status
+verification status
+payment status
+ownership
+```
+
+Sensitive state changes must be controlled by authorized server-side operations.
+
+---
+
+# 13. Input Validation
+
+Validate all externally supplied input.
+
+Validation must cover:
+
+- type
+- structure
+- length
+- format
+- allowed values
+- ranges
+- relationships between fields
+- business constraints where applicable
+
+Use the project's established validation system, including Zod where applicable.
+
+Validation is not a substitute for authorization.
+
+A valid request can still be unauthorized.
+
+---
+
+# 14. Injection Prevention
+
+Never construct executable queries or commands from untrusted strings without appropriate parameterization or escaping.
+
+Protect against:
+
+```text
+SQL injection
+NoSQL injection
+command injection
+LDAP injection
+template injection
+expression injection
+search query injection
+XSS
+header injection
+path traversal
+```
+
+Prefer parameterized queries and structured APIs.
+
+Do not manually concatenate user input into:
+
+```text
+SQL
+database filters
+shell commands
+HTML
+JavaScript
+search queries
+regular expressions
+```
+
+unless the operation has been explicitly designed and safely constrained.
+
+---
+
+# 15. SQL and Database Security
+
+Use parameterized database operations.
+
+Do not construct SQL using string concatenation with user-controlled values.
+
+Database credentials must:
+
+- be stored securely
+- use least privilege
+- never be committed to source control
+- not be exposed to clients
+
+Application database users should receive only the permissions they require.
+
+Avoid using administrative database credentials for normal application operations.
+
+---
+
+# 16. NoSQL Security
+
+Treat MongoDB filters and operators as untrusted input.
+
+Do not blindly merge request objects into database filters.
+
+Avoid patterns equivalent to:
+
+```ts
+findOne(req.body)
+```
+
+when the request body can control query operators or fields.
+
+Explicitly construct database filters from validated input.
+
+---
+
+# 17. Database Access Control
+
+Do not bypass repository or domain boundaries merely because direct database access is convenient.
+
+Security-sensitive queries should make authorization and tenant boundaries explicit.
+
+Be especially careful with:
+
+- bulk queries
+- administrative queries
+- reporting queries
+- aggregation pipelines
+- background workers
+- scheduled jobs
+- migration scripts
+
+Background processes are not automatically trusted simply because they run on the server.
+
+---
+
+# 18. Sensitive Data
+
+Collect and store only data that is actually required.
+
+Sensitive information should have an explicit reason to exist.
+
+Avoid storing:
+
+- unnecessary credentials
+- unnecessary personal information
+- unnecessary authentication artifacts
+- unnecessary payment information
+- unnecessary secrets
+
+When sensitive data is no longer required, follow the project's retention and deletion policies.
+
+---
+
+# 19. Encryption
+
+Use established cryptographic libraries and protocols.
+
+Never implement cryptographic primitives yourself.
+
+Data protection should consider:
+
+```text
+in transit
+at rest
+during processing
+in backups
+in logs
+in caches
+```
+
+Use TLS for network communication where appropriate.
+
+Do not disable certificate verification to make development or production integrations work.
+
+Never replace secure cryptography with:
+
+```text
+base64
+hashing where encryption is required
+custom XOR schemes
+home-made encryption
+obfuscation
+```
+
+---
+
+# 20. Secrets Management
+
+Secrets must never be committed to source control.
+
+This includes:
+
+```text
+API keys
+database credentials
+JWT secrets
+private keys
+OAuth secrets
+cloud credentials
+encryption keys
+webhook secrets
+service credentials
+```
+
+Use the project's approved secret-management mechanism.
+
+Environment variables may be appropriate for runtime configuration, but they are not automatically a complete secret-management solution.
+
+Never expose server-side secrets through:
+
+- frontend bundles
+- public configuration
+- API responses
+- logs
+- error messages
+
+---
+
+# 21. Environment Separation
+
+Do not reuse production secrets in:
+
+```text
+local development
+tests
+preview environments
+CI experiments
+```
+
+unless explicitly required and approved.
+
+Development and test environments should use isolated credentials and data.
+
+Never use real production personal data for testing without explicit authorization and appropriate controls.
+
+---
+
+# 22. Frontend Security
+
+Assume all client-side code can be inspected and modified.
+
+Never put secrets in frontend code.
+
+Anything shipped to the browser should be considered public.
+
+Do not implement security-sensitive authorization exclusively in:
+
+```text
+React state
+Zustand
+localStorage
+sessionStorage
+URL parameters
+frontend route guards
+```
+
+Frontend security controls improve user experience and defense in depth, but backend authorization remains authoritative.
+
+---
+
+# 23. Cross-Site Scripting
+
+Avoid injecting untrusted content into HTML.
+
+Do not use mechanisms equivalent to:
+
+```text
+dangerouslySetInnerHTML
+innerHTML
+raw HTML rendering
+```
+
+with untrusted content.
+
+When rich content is required:
+
+1. Define an explicit content model.
+2. Sanitize according to the project's approved mechanism.
+3. Restrict allowed markup and attributes.
+4. Test malicious payloads.
+
+Do not assume that escaped text and sanitized HTML are interchangeable.
+
+---
+
+# 24. CSRF
+
+For cookie-authenticated operations, evaluate CSRF risk.
+
+Use appropriate defenses such as:
+
+```text
+SameSite cookies
+CSRF tokens
+origin validation
+appropriate request design
+```
+
+Do not assume that CORS alone prevents CSRF.
+
+CORS controls browser cross-origin access.
+
+It is not a replacement for CSRF protection.
+
+---
+
+# 25. CORS
+
+CORS configuration must be explicit.
+
+Avoid:
+
+```text
+allow all origins
+allow arbitrary reflected origins
+wildcard origins with credentials
+```
+
+unless there is a deliberate and documented security reason.
+
+Allowed origins should come from validated configuration.
+
+Do not use CORS as an authentication or authorization mechanism.
+
+---
+
+# 26. Rate Limiting
+
+Rate-limit security-sensitive or abuse-prone operations where appropriate.
+
+Examples include:
+
+```text
+login
+password reset
+OTP requests
+verification
+search
+file uploads
+payment operations
+resource creation
+messaging
+expensive API operations
+```
+
+Rate limits should consider:
+
+- identity
+- IP
+- tenant
+- endpoint
+- resource
+- cost
+- distributed deployment
+
+Do not implement rate limiting in a way that allows one tenant or user to exhaust shared infrastructure unnecessarily.
+
+---
+
+# 27. Abuse Prevention
+
+Security includes protection against resource abuse.
+
+Consider limits for:
+
+```text
+request size
+file size
+pagination size
+batch size
+message size
+search complexity
+upload frequency
+job creation
+concurrent operations
+```
+
+Never allow clients to control unbounded resource consumption.
+
+---
+
+# 28. File Uploads
+
+Treat uploaded files as untrusted.
+
+Validate:
+
+- file size
+- file type
+- extension
+- content where necessary
+- filename
+- storage path
+
+Do not trust the MIME type supplied by the client.
+
+Avoid storing uploaded files directly in executable server directories.
+
+Use generated storage identifiers instead of trusting user-provided filenames.
+
+If files are processed by parsers, assume parser input may be malicious.
+
+---
+
+# 29. Path Traversal
+
+Never construct filesystem paths directly from untrusted user input.
+
+Do not allow user input to control paths such as:
+
+```text
+../../
+..\..\ 
+absolute filesystem paths
+symbolic-link targets
+```
+
+Resolve and validate paths against an explicitly permitted root.
+
+Prefer generated identifiers over user-controlled filesystem names.
+
+---
+
+# 30. Webhooks and External Callbacks
+
+Webhook payloads are untrusted until verified.
+
+Validate:
+
+```text
+signature
+timestamp
+source
+payload structure
+event type
+idempotency
+```
+
+where the provider supports these controls.
+
+Do not process a payment, account, or other security-sensitive event solely because a request reached the webhook endpoint.
+
+---
+
+# 31. External Services
+
+Treat third-party services as separate trust boundaries.
+
+External integrations must define:
+
+- authentication
+- authorization
+- timeouts
+- retry behavior
+- failure behavior
+- data shared
+- sensitive data exposure
+- response validation
+
+Do not blindly trust external API responses.
+
+Validate external data before using it in security-sensitive operations.
+
+---
+
+# 32. Logging
+
+Logs must help diagnose security events without becoming a source of data leakage.
+
+Never log:
+
+```text
+passwords
+access tokens
+refresh tokens
+session secrets
+private keys
+encryption keys
+payment credentials
+sensitive personal information
+```
+
+Be careful with:
+
+```text
+request bodies
+authorization headers
+cookies
+query parameters
+file contents
+authentication responses
+```
+
+Security-sensitive events should be logged with enough context to investigate them.
+
+Prefer structured logs.
+
+---
+
+# 33. Error Responses
+
+Do not expose internal implementation details to untrusted clients.
+
+Avoid returning:
+
+```text
+stack traces
+database errors
+SQL queries
+filesystem paths
+internal service topology
+secret values
+debug information
+```
+
+Production responses should provide useful but appropriately limited information.
+
+Internal logs can contain additional diagnostic context where safe.
+
+---
+
+# 34. Enumeration Resistance
+
+Be careful about exposing whether a resource exists.
+
+Examples include:
+
+```text
+user accounts
+email addresses
+phone numbers
+password-reset targets
+private bookings
+private documents
+```
+
+Where appropriate, use consistent responses and timing characteristics to reduce unnecessary information disclosure.
+
+Do not sacrifice useful user experience without a concrete security reason.
+
+---
+
+# 35. Dependency Security
+
+Dependencies are part of the security boundary.
+
+Before adding a dependency:
+
+- verify its purpose
+- evaluate maintenance status
+- check licensing requirements
+- understand its permissions
+- prefer established packages
+- avoid unnecessary dependencies
+
+Keep dependencies updated according to the project's maintenance policy.
+
+Security advisories must be investigated rather than blindly ignored.
+
+Do not add a large dependency for trivial functionality that can safely be implemented using existing capabilities.
+
+---
+
+# 36. Supply Chain Security
+
+Treat package installation and build tooling as security-sensitive.
+
+Protect:
+
+```text
+package manifests
+lockfiles
+build scripts
+CI workflows
+container definitions
+deployment scripts
+```
+
+Be cautious with:
+
+```text
+postinstall scripts
+unknown packages
+unverified binaries
+remote installation scripts
+untrusted GitHub actions
+```
+
+Do not execute arbitrary downloaded scripts without understanding what they do.
+
+---
+
+# 37. CI/CD Security
+
+CI/CD systems can access production infrastructure and secrets.
+
+Therefore:
+
+- use least-privilege credentials
+- restrict secret exposure
+- protect deployment branches
+- review workflow changes
+- avoid printing secrets
+- pin or control critical external actions where appropriate
+- separate build and deployment permissions
+
+Never add a CI workaround that disables security controls merely to make a pipeline pass.
+
+---
+
+# 38. Container Security
+
+Production containers should follow least privilege.
+
+Prefer:
+
+```text
+non-root execution
+minimal base images
+minimal installed packages
+read-only filesystems where practical
+limited capabilities
+explicit ports
+validated environment configuration
+```
+
+Do not place secrets directly into container images.
+
+Do not copy unnecessary development files into production images.
+
+Keep images patched and reproducible.
+
+---
+
+# 39. Cloud Security
+
+Cloud resources must follow least privilege.
+
+Review permissions for:
+
+```text
+service accounts
+IAM roles
+storage buckets
+databases
+queues
+Kubernetes workloads
+VMs
+serverless services
+```
+
+Avoid broad permissions such as unrestricted administrator access for application services.
+
+Public access must be intentional and documented.
+
+---
+
+# 40. Kubernetes Security
+
+Kubernetes workloads should not receive more permissions than required.
+
+Review:
+
+```text
+ServiceAccounts
+RBAC
+Secrets
+NetworkPolicies
+Pod security settings
+container privileges
+resource limits
+service exposure
+```
+
+Do not expose internal services publicly unless required.
+
+Do not mount sensitive host resources into application containers without explicit justification.
+
+---
+
+# 41. Cache Security
+
+Cached data must respect authorization and tenant boundaries.
+
+Cache keys must prevent collisions between:
+
+```text
+users
+tenants
+roles
+resources
+authorization contexts
+```
+
+Never cache sensitive data under globally shared keys unless the data is intentionally public.
+
+Be careful when caching authorization-dependent responses.
+
+A cache hit must not bypass authorization.
+
+---
+
+# 42. OpenSearch Security
+
+OpenSearch is a derived search system, not an authorization bypass.
+
+Search queries must respect:
+
+```text
+tenant boundaries
+resource visibility
+user permissions
+data classification
+```
+
+Do not index sensitive fields unless there is a legitimate requirement.
+
+Do not return fields merely because they are present in the search document.
+
+Authorization should be enforced consistently between the primary data store and search projection.
+
+---
+
+# 43. Background Jobs
+
+Background jobs must have explicit authorization context where required.
+
+Do not assume:
+
+```text
+"this is an internal worker"
+```
+
+means unrestricted access.
+
+Jobs must respect:
+
+- tenant boundaries
+- resource ownership
+- data access policies
+- idempotency
+- least privilege
+
+Sensitive job payloads should be minimized.
+
+---
+
+# 44. Event Security
+
+Events can cross trust boundaries.
+
+Event payloads should contain only the data consumers require.
+
+Do not publish:
+
+```text
+passwords
+tokens
+secrets
+unnecessary personal information
+internal authorization details
+```
+
+Consumers must not assume that every event field is safe to expose externally.
+
+Validate event payloads at consumer boundaries where appropriate.
+
+---
+
+# 45. Security-Sensitive State Changes
+
+Actions such as:
+
+```text
+changing roles
+changing tenant membership
+changing payment state
+resetting authentication
+deleting protected resources
+changing ownership
+modifying security settings
+```
+
+should receive stronger validation and auditing where appropriate.
+
+Do not combine these operations with unrelated convenience logic.
+
+---
+
+# 46. Auditability
+
+Security-sensitive actions should be traceable.
+
+Where required, capture appropriate information such as:
+
+```text
+who
+what
+when
+which resource
+which tenant
+result
+request or correlation identifier
+```
+
+Audit records must themselves be protected from unauthorized modification or disclosure.
+
+Do not store unnecessary sensitive payloads in audit records.
+
+---
+
+# 47. Security Testing
+
+Security-sensitive functionality requires tests appropriate to its risk.
+
+Test:
+
+```text
+unauthenticated access
+unauthorized access
+cross-user access
+cross-tenant access
+role boundaries
+malformed input
+injection attempts
+expired credentials
+revoked credentials
+rate-limit behavior
+file upload abuse
+webhook verification
+```
+
+Tests should verify that unauthorized actions fail, not merely that authorized actions succeed.
+
+---
+
+# 48. Secure Defaults
+
+New functionality should default to the safer state.
+
+Prefer:
+
+```text
+deny access
+private resource
+minimal permissions
+validation enabled
+logging enabled where appropriate
+bounded resource usage
+secure transport
+```
+
+over permissive defaults that require future code to remember to tighten them.
+
+---
+
+# 49. Security Changes Require Extra Review
+
+Changes involving any of the following require deliberate security review:
+
+- authentication
+- authorization
+- permissions
+- tenant isolation
+- secrets
+- encryption
+- personal data
+- payment systems
+- file uploads
+- webhooks
+- external integrations
+- infrastructure permissions
+- database access controls
+- public endpoints
+- session management
+- security-sensitive configuration
+
+Do not treat these as ordinary refactors.
+
+---
+
+# 50. Never Disable Security to Fix a Problem
+
+Do not solve development or deployment problems by disabling:
+
+```text
+TLS verification
+authentication
+authorization
+CORS restrictions
+CSRF protection
+input validation
+rate limiting
+security middleware
+dependency scanning
+container security
+```
+
+If a security control causes a legitimate problem, understand the underlying issue and fix the integration correctly.
+
+Temporary security bypasses require explicit authorization and a documented removal path.
+
+---
+
+# 51. Security Review Checklist
+
+Before finalizing security-sensitive code, verify:
+
+- [ ] Authentication is handled by the established mechanism.
+- [ ] Authorization is enforced server-side.
+- [ ] Resource-level access is checked.
+- [ ] Tenant isolation is preserved.
+- [ ] Client-controlled security fields are not trusted.
+- [ ] External input is validated.
+- [ ] Database queries are safely constructed.
+- [ ] No injection vulnerability was introduced.
+- [ ] Secrets are not exposed or committed.
+- [ ] Sensitive information is not logged.
+- [ ] Error responses do not leak internals.
+- [ ] Rate/resource limits exist where appropriate.
+- [ ] File uploads are treated as untrusted.
+- [ ] External integrations validate responses.
+- [ ] Webhooks verify authenticity where applicable.
+- [ ] Cache and search boundaries preserve authorization.
+- [ ] Background jobs respect security boundaries.
+- [ ] Security-sensitive actions are auditable where required.
+- [ ] Relevant negative authorization tests exist.
+- [ ] Dependencies and infrastructure permissions remain appropriate.
+
+---
+
+# 52. Final Principle
+
+Security should be part of the design, not a patch applied afterward.
+
+Every engineer should assume:
+
+```text
+the client can be modified
+the network can fail
+requests can be forged
+identifiers can be manipulated
+users can attempt unauthorized access
+dependencies can contain vulnerabilities
+external services can fail or behave unexpectedly
+internal systems can be misconfigured
+```
+
+Therefore:
+
+> **Never trust the client.**  
+> **Never assume authentication implies authorization.**  
+> **Never allow tenant boundaries to depend on client behavior.**  
+> **Never expose secrets unnecessarily.**  
+> **Never weaken security to make an implementation convenient.**  
+> **Validate at trust boundaries.**  
+> **Use least privilege.**  
+> **Fail safely.**
+--- 

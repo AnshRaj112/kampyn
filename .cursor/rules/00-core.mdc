@@ -1,42 +1,352 @@
 ---
-description: Core KAMPYN engineering rules that apply to every change
+description: Core Cursor instructions for KAMPYN. Establishes instruction hierarchy, repository discovery, implementation discipline, and verification behavior.
 alwaysApply: true
 ---
 
-# Core Engineering Rules
+# KAMPYN — Core Cursor Rules
 
-Follow `AGENTS.md` and the relevant policies in `.ai/`.
+## 1. Instruction Hierarchy
 
-Never:
+KAMPYN's canonical engineering instructions are defined by:
 
-- duplicate existing functionality
-- introduce unnecessary abstractions
-- bypass established architecture
-- weaken type safety
-- ignore errors
-- commit secrets
-- introduce unexplained dependencies
-- modify unrelated files
-- leave broken tests
-- knowingly introduce quadratic algorithms where a better solution exists
+```text
+AGENTS.md
+.ai/
+```
 
-Before writing code:
+This file is an adapter for Cursor and must not become a competing source of truth.
 
-- inspect existing implementations
-- search for reusable utilities
-- understand the data flow
-- understand ownership of the code
-- identify affected tests
+Follow this hierarchy:
+
+```text
+Repository / System Requirements
+            ↓
+        AGENTS.md
+            ↓
+          .ai/*
+            ↓
+    Existing Architecture
+            ↓
+    Local Module Conventions
+            ↓
+       Task Requirements
+```
+
+When a more specific Cursor rule applies, follow it together with the repository-wide rules.
+
+Do not duplicate detailed engineering policies here when they already exist under `.ai/`.
+
+---
+
+## 2. Read Before Editing
+
+Before modifying code:
+
+1. Read `AGENTS.md`.
+2. Identify relevant `.ai/` policies.
+3. Inspect the repository structure.
+4. Inspect the affected files and surrounding module.
+5. Search for existing implementations.
+6. Identify related types, contracts, tests, and dependencies.
+7. Understand the established pattern.
+8. Determine the smallest coherent change.
+
+Do not begin implementation based solely on the task description.
+
+---
+
+## 3. Search Before Creating
+
+Before creating a new:
+
+- component
+- hook
+- service
+- repository
+- utility
+- type
+- validator
+- API client
+- middleware
+- helper
+- abstraction
+- configuration
+- test helper
+
+search the repository first.
+
+Search by behavior, domain concept, exported symbol, API contract, and related types where appropriate.
+
+Prefer reuse when an existing implementation correctly represents the required behavior.
+
+Do not create duplicate implementations merely because an existing implementation has a different filename or location.
+
+---
+
+## 4. Preserve Architecture
+
+Follow the architecture already established by the repository.
+
+Do not:
+
+- introduce a competing pattern
+- bypass existing layers
+- move logic across architectural boundaries without justification
+- introduce framework-specific behavior into domain logic unnecessarily
+- directly access infrastructure from presentation code
+- introduce a new abstraction without understanding existing abstractions
+
+When an existing pattern appears insufficient, inspect its consumers and constraints before replacing it.
+
+Meaningful architectural changes must follow the project's architecture decision process.
+
+---
+
+## 5. Keep Changes Focused
+
+Implement the smallest complete change that satisfies the requirement.
+
+Do not include unrelated:
+
+- refactoring
+- formatting
+- renaming
+- dependency upgrades
+- directory reorganizations
+- cleanup
+- architecture changes
+
+unless they are necessary for the requested work.
+
+If an unrelated issue is discovered, do not silently expand the task.
+
+---
+
+## 6. Reuse Before Abstraction
 
 Prefer:
 
-- composition
-- pure functions
-- immutable data where practical
-- explicit types
-- dependency inversion
-- small cohesive modules
-- deterministic behavior
-- testable business logic
+```text
+existing implementation
+        ↓
+extend existing implementation
+        ↓
+create new implementation
+        ↓
+introduce new abstraction
+```
 
-Production source files should normally remain under 200 lines.
+Only introduce a new abstraction when it represents a real and understood concept.
+
+Do not create abstractions merely because two pieces of code look similar.
+
+Do not create speculative infrastructure or future-facing code that the current requirement does not need.
+
+---
+
+## 7. Type and Contract Safety
+
+Preserve existing contracts.
+
+Do not silently change:
+
+- public APIs
+- request formats
+- response structures
+- event payloads
+- database contracts
+- SDK contracts
+- exported types
+
+Maintain strong typing.
+
+Do not weaken types simply to make code compile.
+
+Follow the project's language-specific type-safety policies under `.ai/`.
+
+---
+
+## 8. Security Boundaries
+
+Treat external input as untrusted.
+
+For security-sensitive changes, consult the relevant `.ai/security/` policy before implementation.
+
+Never:
+
+- expose secrets
+- commit credentials
+- bypass authorization
+- trust client-side permission checks
+- log sensitive credentials
+- weaken security controls for convenience
+
+Security decisions must remain server-enforced where applicable.
+
+---
+
+## 9. Performance Awareness
+
+For changes involving algorithms, databases, large datasets, concurrency, search, APIs, or high-frequency operations:
+
+1. Consider expected input scale.
+2. Consider time complexity.
+3. Consider space complexity.
+4. Consider database query behavior.
+5. Consider network round trips.
+6. Consider concurrency and resource limits.
+7. Consult `.ai/performance/` when applicable.
+
+Do not introduce avoidable quadratic or worse behavior when an appropriate alternative exists.
+
+Do not optimize blindly without understanding the workload.
+
+---
+
+## 10. Testing Is Part of the Change
+
+Every production change must have appropriate verification.
+
+Before completing work:
+
+- identify affected tests
+- add or update tests where required
+- run relevant tests
+- investigate failures
+- do not weaken tests merely to make them pass
+
+Use the centralized testing architecture defined by the repository.
+
+Do not create scattered test locations without understanding the project's testing conventions.
+
+---
+
+## 11. Verify Before Claiming Completion
+
+After implementation, run the applicable checks.
+
+Depending on the change, this may include:
+
+```text
+formatting
+linting
+type checking
+unit tests
+integration tests
+contract tests
+E2E tests
+build
+security checks
+performance checks
+```
+
+Never claim that a command passed unless it was actually run.
+
+Never claim that a requirement is satisfied without verification.
+
+If a check cannot be performed, state that clearly.
+
+---
+
+## 12. Review the Diff
+
+Before finishing:
+
+1. Inspect changed files.
+2. Review the complete diff.
+3. Check for accidental modifications.
+4. Check for duplicated logic.
+5. Check for unnecessary dependencies.
+6. Check for security issues.
+7. Check for performance regressions.
+8. Check for missing tests.
+9. Check for unrelated changes.
+10. Check whether documentation needs updating.
+
+The final diff should tell one coherent story.
+
+---
+
+## 13. Evidence Over Assumption
+
+Do not assume:
+
+- an API exists
+- a dependency is installed
+- a function behaves a certain way
+- a database field exists
+- an environment variable exists
+- a service has a particular interface
+- a test covers a particular behavior
+
+Inspect the repository, configuration, types, tests, documentation, or runtime behavior first.
+
+If something cannot be verified, do not invent it.
+
+---
+
+## 14. Cursor-Specific Behavior
+
+Use Cursor's rule system to load the most specific applicable rules.
+
+The root rule provides universal project behavior.
+
+Technology- or directory-specific rules should contain technology-specific guidance rather than being duplicated here.
+
+Expected structure:
+
+```text
+.cursor/
+└── rules/
+    ├── 00-core.mdc
+    ├── 01-architecture.mdc
+    ├── 02-code-quality.mdc
+    ├── 03-performance.mdc
+    ├── 04-security.mdc
+    ├── 05-testing.mdc
+    ├── 06-documentation.mdc
+    ├── 07-git.mdc
+    ├── frontend.mdc
+    ├── backend.mdc
+    ├── database.mdc
+    └── api.mdc
+```
+
+Do not turn `00-core.mdc` into a duplicate of these rules.
+
+---
+
+## 15. Final Operating Loop
+
+For every meaningful change, follow:
+
+```text
+Understand
+    ↓
+Inspect
+    ↓
+Search
+    ↓
+Plan
+    ↓
+Implement
+    ↓
+Test
+    ↓
+Verify
+    ↓
+Review
+    ↓
+Document
+```
+
+The guiding principles are:
+
+> **Inspect before modifying.**  
+> **Search before creating.**  
+> **Reuse before duplicating.**  
+> **Understand before abstracting.**  
+> **Validate before trusting.**  
+> **Measure before optimizing.**  
+> **Test before declaring complete.**  
+> **Verify before claiming success.**

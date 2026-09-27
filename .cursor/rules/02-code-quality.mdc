@@ -1,6 +1,1257 @@
 ---
-description: Code quality and maintainability guidance
-alwaysApply: false
+description: KAMPYN production code quality standards covering readability, naming, module cohesion, file and folder size, single responsibility, type safety, configuration management, dependency boundaries, error handling, validation, abstraction, duplication, documentation, reviewability, and maintainability.
+alwaysApply: true
 ---
 
-Follow the code-quality, type-safety, reuse, and cleanup rules in `AGENTS.md` and the applicable `.ai/` policies.
+# KAMPYN — Code Quality Rules
+
+## 1. Purpose
+
+These rules define how production code should be written and maintained.
+
+The goal is not to make code merely "clean."
+
+The goal is to make KAMPYN code:
+
+- understandable
+- predictable
+- maintainable
+- reusable
+- strongly typed
+- testable
+- consistent
+- easy to review
+- easy for a new engineer to understand
+
+General engineering principles are defined in `AGENTS.md`.
+
+Architectural boundaries are defined in `01-architecture.mdc` and `.ai/architecture/`.
+
+Performance-specific rules belong in the performance policies.
+
+---
+
+# 2. Readability Over Cleverness
+
+Code should communicate its intent directly.
+
+Prefer:
+
+```text
+clear
+explicit
+boring
+predictable
+```
+
+over:
+
+```text
+clever
+compressed
+implicit
+magical
+over-engineered
+```
+
+Do not optimize for the fewest lines of code.
+
+Optimize for the smallest amount of complexity required to express the behavior correctly.
+
+---
+
+# 3. Naming
+
+Names should communicate intent and domain meaning.
+
+Prefer:
+
+```ts
+createOrder()
+calculateOrderTotal()
+validateBookingRequest()
+findAvailableRooms()
+```
+
+over:
+
+```ts
+process()
+handle()
+doThing()
+data()
+result()
+temp()
+helper()
+```
+
+Avoid unnecessary abbreviations.
+
+Prefer domain terminology consistently throughout the repository.
+
+If the business calls something an `Order`, do not introduce another name such as `PurchaseRecord` for the same concept without a documented reason.
+
+---
+
+# 4. Variables
+
+Variables should represent meaningful concepts.
+
+Avoid vague names such as:
+
+```ts
+data
+value
+item
+obj
+result
+response
+temp
+x
+y
+```
+
+unless their meaning is genuinely obvious from a very small local scope.
+
+Prefer:
+
+```ts
+order
+orderTotal
+availableItems
+authenticatedUser
+paymentStatus
+searchResults
+```
+
+Do not encode unnecessary type information into variable names.
+
+Avoid:
+
+```text
+strName
+arrItems
+objUser
+```
+
+when the language already provides type information.
+
+---
+
+# 5. Functions
+
+Functions should perform one coherent operation.
+
+A function should have:
+
+- a clear purpose
+- explicit inputs
+- an understandable output
+- predictable side effects
+- manageable branching
+- manageable parameter count
+
+Avoid functions that simultaneously:
+
+```text
+validate
+transform
+persist
+send notifications
+format responses
+handle HTTP
+```
+
+unless that combination is genuinely one cohesive application operation.
+
+Prefer composing smaller meaningful functions.
+
+---
+
+# 6. Function Size
+
+There is no universal maximum function length.
+
+However, a function should be reconsidered when:
+
+- its purpose becomes difficult to summarize
+- multiple responsibilities appear
+- nesting becomes difficult to follow
+- branches represent unrelated cases
+- setup and business logic become mixed
+- error handling dominates the implementation
+
+Do not split functions into meaningless fragments solely to make them shorter.
+
+Extract code when the extracted unit has a meaningful responsibility or improves reuse, readability, testing, or ownership.
+
+---
+
+# 7. File Size
+
+The default production source-file target is:
+
+```text
+≤ 200 LOC
+```
+
+Treat 200 lines as an architectural pressure threshold.
+
+When a file exceeds the threshold:
+
+1. Identify distinct responsibilities.
+2. Determine whether those responsibilities can be independently owned.
+3. Extract cohesive modules where appropriate.
+4. Preserve clear relationships between the modules.
+
+Do not create artificial fragmentation such as:
+
+```text
+service-part1.ts
+service-part2.ts
+service-part3.ts
+```
+
+merely to satisfy a line count.
+
+Generated files, migrations, snapshots, and machine-produced files may be exempt where splitting would reduce correctness or clarity.
+
+---
+
+# 8. Module Cohesion
+
+A module should contain closely related functionality, and **each folder should contain a maximum of 5 files**.
+
+When a folder contains more than 5 files, it should be divided into smaller, logically grouped subfolders with clear and meaningful names. This keeps the project easier to navigate, maintain, and scale.
+
+### Good
+
+A small module with closely related files:
+
+```text
+orders/
+├── order.service.ts
+├── order.repository.ts
+├── order.types.ts
+└── order.validation.ts
+```
+
+This folder has only 4 files, and all files belong to the same `orders` domain.
+
+### Good — More Than 5 Files
+
+If a module grows beyond 5 files, divide it into smaller submodules based on responsibility:
+
+```text
+orders/
+├── services/
+│   ├── order.service.ts
+│   ├── order-status.service.ts
+│   └── order-notification.service.ts
+├── repositories/
+│   ├── order.repository.ts
+│   └── order-item.repository.ts
+├── validation/
+│   ├── order.validation.ts
+│   └── order-item.validation.ts
+├── types/
+│   ├── order.types.ts
+│   └── order-item.types.ts
+└── controllers/
+    ├── order.controller.ts
+    └── order-admin.controller.ts
+```
+
+Here, the original `orders` module contains more than 5 files, so the files are grouped into subfolders according to their responsibilities.
+
+### Good — Separate Domains
+
+If the files are related to different domains, they should be separated into their respective domain folders:
+
+```text
+modules/
+├── orders/
+│   ├── order.service.ts
+│   ├── order.repository.ts
+│   ├── order.types.ts
+│   └── order.validation.ts
+│
+├── users/
+│   ├── user.service.ts
+│   ├── user.repository.ts
+│   ├── user.types.ts
+│   └── user.validation.ts
+│
+└── payments/
+    ├── payment.service.ts
+    ├── payment.repository.ts
+    ├── payment.types.ts
+    └── payment.validation.ts
+```
+
+Each domain owns its related functionality instead of placing unrelated files into a common folder.
+
+### Bad
+
+Avoid catch-all folders containing unrelated functionality:
+
+```text
+utils/
+├── orders.ts
+├── users.ts
+├── payments.ts
+├── formatting.ts
+├── database.ts
+├── random.ts
+├── email.ts
+└── authentication.ts
+```
+
+This folder contains unrelated responsibilities and also exceeds the 5-file limit.
+
+Instead, organize the functionality according to its domain or responsibility:
+
+```text
+modules/
+├── orders/
+│   └── ...
+├── users/
+│   └── ...
+├── payments/
+│   └── ...
+├── authentication/
+│   └── ...
+└── shared/
+    ├── formatting.ts
+    ├── random.ts
+    └── email.ts
+```
+
+### Folder Size Rule
+
+The **5-file maximum applies to every folder**, including nested folders.
+
+For example:
+
+```text
+orders/
+├── services/        # ≤ 5 files
+├── repositories/    # ≤ 5 files
+├── validation/      # ≤ 5 files
+├── types/           # ≤ 5 files
+└── controllers/     # ≤ 5 files
+```
+
+If any of these folders grows beyond 5 files, divide it further based on a meaningful responsibility:
+
+```text
+orders/
+└── services/
+    ├── customer/
+    │   ├── create-order.service.ts
+    │   ├── cancel-order.service.ts
+    │   └── update-order.service.ts
+    │
+    └── admin/
+        ├── approve-order.service.ts
+        ├── reject-order.service.ts
+        └── refund-order.service.ts
+```
+
+### Guidelines
+
+* Keep **maximum 5 files per folder**.
+* Group files by **domain and responsibility**, not simply by file type.
+* When a folder exceeds 5 files, create meaningful subfolders.
+* Avoid generic catch-all folders such as `misc/`, `common/`, or `everything/`.
+* Use clear and descriptive folder names such as `services/`, `repositories/`, `validation/`, `controllers/`, or domain-specific names.
+* Do not split files unnecessarily just to satisfy the 5-file rule; the grouping should remain logically cohesive.
+* Keep related functionality close together.
+* Separate unrelated domains even if they are small.
+* Prefer **domain-driven organization** over a large collection of global utility files.
+
+> **Rule of thumb:** A folder should represent one clear responsibility and contain **no more than 5 files**. If it grows beyond that, divide it into smaller, logically cohesive folders.
+
+
+---
+
+# 9. Single Responsibility
+
+A module, class, function, hook, component, or service should have one coherent reason to change.
+
+This does not mean every function must perform exactly one primitive operation.
+
+It means the unit should represent a meaningful responsibility.
+
+For example:
+
+```text
+OrderService
+```
+
+may reasonably coordinate order creation.
+
+It should not also become responsible for:
+
+```text
+user authentication
+email templating
+OpenSearch indexing
+inventory database migrations
+frontend formatting
+```
+
+Separate responsibilities at meaningful boundaries.
+
+---
+
+# 10. Avoid God Objects
+
+Avoid objects or services that become central dumping grounds.
+
+Warning signs include:
+
+- many unrelated dependencies
+- dozens of methods
+- unrelated domain concepts
+- frequent modification by unrelated features
+- difficult-to-test behavior
+- unclear ownership
+
+When this happens, identify the actual domain responsibilities and separate them.
+
+Do not simply split the class mechanically.
+
+---
+
+# 11. Duplication
+
+Do not duplicate business logic.
+
+Before copying code, determine whether:
+
+- the same behavior already exists
+- an existing function can be reused
+- an existing abstraction can be extended
+- the logic belongs to a shared domain capability
+
+However, do not abstract every similarity.
+
+Two pieces of code can look similar while representing different concepts.
+
+Prefer:
+
+```text
+semantic reuse
+```
+
+over:
+
+```text
+textual reuse
+```
+
+---
+
+# 12. Abstraction
+
+An abstraction should solve a real problem.
+
+Before introducing one, ask:
+
+```text
+What concept does this represent?
+Who owns it?
+Who consumes it?
+What behavior is actually shared?
+Does it reduce complexity?
+Will it remain understandable?
+```
+
+Do not introduce abstractions merely because:
+
+- two files contain similar code
+- a pattern appears twice
+- a framework allows it
+- "clean architecture" suggests it
+- future reuse might happen
+
+Premature abstraction can create more coupling than duplication.
+
+---
+
+# 13. Type Safety
+
+Use the type system to prevent invalid states where practical.
+
+Prefer:
+
+```text
+explicit types
+narrow types
+domain types
+discriminated unions
+typed contracts
+validated boundaries
+```
+
+Avoid:
+
+```text
+any
+unsafe casts
+unnecessary type assertions
+implicit contracts
+duplicated type definitions
+```
+
+`any` requires justification.
+
+Prefer `unknown` when the actual type is not known.
+
+Narrow unknown values before operating on them.
+
+Do not weaken a type merely to silence an error.
+
+---
+
+# 14. Domain Types
+
+Important domain concepts should have meaningful types.
+
+Avoid passing loosely structured objects throughout the application.
+
+Prefer:
+
+```ts
+type OrderId = string;
+
+interface Order {
+  id: OrderId;
+  status: OrderStatus;
+  total: Money;
+}
+```
+
+over repeatedly passing unrelated primitives whose meaning depends entirely on convention.
+
+Do not introduce nominal types unnecessarily.
+
+Use domain types where they prevent meaningful classes of errors.
+
+---
+
+# 15. Constants
+
+Do not scatter magic values throughout production code.
+
+Avoid:
+
+```ts
+if (status === 3) {
+```
+
+Prefer:
+
+```ts
+if (status === OrderStatus.Confirmed) {
+```
+
+Constants should have meaningful ownership.
+
+Do not create a giant global constants file containing unrelated values.
+
+Prefer:
+
+```text
+orders/constants
+payments/constants
+authentication/constants
+```
+
+where domain ownership is clear.
+
+---
+
+# 16. Control Flow
+
+Prefer simple, readable control flow.
+
+Avoid deeply nested conditions.
+
+Prefer early returns when they improve readability:
+
+```ts
+if (!user) {
+  return unauthorized();
+}
+
+if (!user.canPlaceOrders) {
+  return forbidden();
+}
+
+return createOrder(user);
+```
+
+over deeply nested blocks.
+
+Do not use early returns mechanically if they make the function harder to understand.
+
+---
+
+# 17. Boolean Logic
+
+Complex boolean expressions should be made understandable.
+
+Avoid:
+
+```ts
+if (user && user.active && !user.suspended && user.role === "admin" && ...)
+```
+
+when the condition represents a meaningful domain concept.
+
+Prefer:
+
+```ts
+const canManageOrders = isActiveAdmin(user);
+
+if (canManageOrders) {
+  ...
+}
+```
+
+Do not extract trivial conditions into meaningless functions.
+
+---
+
+# 18. Side Effects
+
+Make side effects explicit.
+
+Side effects include:
+
+- database writes
+- network requests
+- file operations
+- cache mutation
+- event publication
+- external API calls
+- logging
+- global state mutation
+
+Pure transformations should remain pure when practical.
+
+Avoid functions whose names imply computation but secretly perform external mutations.
+
+For example, avoid:
+
+```ts
+calculateOrderTotal()
+```
+
+if the function also writes to the database.
+
+The name should accurately represent behavior.
+
+---
+
+# 19. Immutability
+
+Prefer immutable data transformations where they improve safety and clarity.
+
+Avoid unnecessary mutation of shared state.
+
+Be especially careful with:
+
+- global state
+- cached objects
+- shared collections
+- request context
+- concurrent data
+- domain entities crossing boundaries
+
+Mutation is not inherently forbidden.
+
+Use it when it is:
+
+- local
+- intentional
+- understandable
+- safe
+
+Do not introduce immutability abstractions merely for stylistic reasons.
+
+---
+
+# 20. Error Handling
+
+Errors should preserve context and remain meaningful.
+
+Do not:
+
+```text
+swallow errors
+return null for every failure
+catch and ignore exceptions
+replace useful errors with generic messages
+log the same error repeatedly at every layer
+```
+
+Handle errors at the layer that can meaningfully respond to them.
+
+Do not catch an error merely to rethrow the same error without adding useful context.
+
+Use the project's established error model.
+
+---
+
+# 21. Comments
+
+Code should explain itself wherever practical.
+
+Comments should explain:
+
+- why something is necessary
+- an important constraint
+- a non-obvious trade-off
+- an unusual algorithm
+- compatibility behavior
+- security considerations
+- intentionally surprising behavior
+
+Avoid comments such as:
+
+```ts
+// increment counter
+counter++;
+```
+
+Do not leave commented-out implementations in production code.
+
+If code is difficult to understand because of poor structure, improve the structure rather than adding paragraphs of comments.
+
+---
+
+# 22. Documentation
+
+Document public or exported behavior when it is not obvious.
+
+Important public APIs should communicate:
+
+- purpose
+- inputs
+- outputs
+- errors
+- side effects
+- important constraints
+
+Do not duplicate implementation details in documentation that will quickly become stale.
+
+Keep documentation close to the ownership boundary when appropriate.
+
+---
+
+# 23. API and DTO Separation
+
+Do not automatically expose internal models as external API responses.
+
+Separate:
+
+```text
+Database Model
+       ↓
+Domain Model
+       ↓
+Application Model
+       ↓
+API DTO
+```
+
+only where those boundaries are actually meaningful.
+
+Do not create unnecessary mapping layers for simple internal cases.
+
+The goal is controlled contracts, not maximum indirection.
+
+---
+
+# 24. Validation
+
+Validate external data at the boundary.
+
+After successful validation, internal functions should be able to rely on the validated shape.
+
+Do not repeatedly validate the same trusted internal value without a concrete reason.
+
+Keep validation logic close to the contract it protects.
+
+Do not mix unrelated business logic into schema validation.
+
+---
+
+# 25. Configuration
+
+Do not scatter configuration access throughout the codebase.
+
+Prefer a clearly defined **configuration boundary** where all environment variables and application-level configuration are loaded, validated, typed, and exposed through a centralized configuration module.
+
+Configuration should be accessed **through this centralized configuration file**, rather than reading environment variables directly in individual modules.
+
+Avoid:
+
+```ts
+process.env.SOME_VALUE
+```
+
+or equivalent environment access being repeated throughout unrelated business modules.
+
+### Good
+
+Define configuration in one centralized file:
+
+```text
+config/
+├── config.ts
+├── env.validation.ts
+└── config.types.ts
+```
+
+```ts
+// config.ts
+
+export const config = {
+  database: {
+    url: process.env.DATABASE_URL,
+  },
+
+  server: {
+    port: Number(process.env.PORT) || 3000,
+  },
+
+  auth: {
+    jwtSecret: process.env.JWT_SECRET,
+    jwtExpiry: process.env.JWT_EXPIRY || "7d",
+  },
+};
+```
+
+Other parts of the application should import and use the centralized configuration:
+
+```ts
+import { config } from "@/config/config";
+
+const dbUrl = config.database.url;
+const jwtSecret = config.auth.jwtSecret;
+```
+
+Instead of:
+
+```ts
+const dbUrl = process.env.DATABASE_URL;
+```
+
+or:
+
+```ts
+const jwtSecret = process.env.JWT_SECRET;
+```
+
+in every individual file.
+
+### Bad
+
+Scattering environment access throughout the application:
+
+```text
+src/
+├── services/
+│   ├── user.service.ts
+│   ├── auth.service.ts
+│   └── payment.service.ts
+├── controllers/
+│   └── auth.controller.ts
+└── utils/
+    └── email.ts
+```
+
+```ts
+// user.service.ts
+process.env.DATABASE_URL;
+```
+
+```ts
+// auth.service.ts
+process.env.JWT_SECRET;
+```
+
+```ts
+// payment.service.ts
+process.env.PAYMENT_API_KEY;
+```
+
+```ts
+// email.ts
+process.env.SMTP_HOST;
+```
+
+This makes configuration difficult to validate, test, modify, and maintain.
+
+### Configuration Boundary
+
+A centralized configuration layer should act as the **single source of truth**:
+
+```text
+Application
+    │
+    ▼
+Configuration Boundary
+    │
+    ├── Environment Variables
+    ├── Validation
+    ├── Type Conversion
+    └── Default Values
+    │
+    ▼
+Typed Configuration Object
+    │
+    ├── Database
+    ├── Authentication
+    ├── Server
+    ├── Storage
+    └── External Services
+```
+
+Business modules should depend on the configuration object rather than directly depending on `process.env`.
+
+### Guidelines
+
+* Keep configuration access **centralized**.
+* Environment variables should normally be read in **one configuration boundary**.
+* Do not access `process.env` directly throughout business logic.
+* Validate required configuration values when the application starts.
+* Provide appropriate default values where applicable.
+* Convert environment values to the correct types where necessary.
+* Keep configuration **typed**.
+* Export configuration through a reusable configuration module.
+* Business modules should import configuration rather than independently reading environment variables.
+* Keep secrets and sensitive values out of source code.
+* Follow the project's existing configuration architecture when one already exists.
+
+> **Rule of thumb:** Configuration should be defined and accessed through a **single, centralized configuration boundary**. Individual modules should consume the configuration rather than independently reading environment variables.
+
+
+---
+
+# 26. Dependencies Between Modules
+
+Prefer explicit dependencies.
+
+Avoid hidden coupling through:
+
+- global mutable state
+- implicit initialization
+- side-effect imports
+- singleton state without justification
+- direct access to another module's internals
+
+A module should expose only what consumers legitimately need.
+
+If another module repeatedly needs internal implementation details, reconsider the boundary.
+
+---
+
+# 27. Imports
+
+Imports should be:
+
+- explicit
+- minimal
+- organized consistently
+- free of unused dependencies
+
+Avoid importing large modules merely to access a tiny unrelated helper when the project's tooling and architecture provide a better boundary.
+
+Avoid circular imports.
+
+If an import cycle appears, treat it as an architectural warning rather than simply suppressing the tooling error.
+
+---
+
+# 28. Dead Code
+
+Do not leave dead code in production.
+
+Remove:
+
+- unused functions
+- unused variables
+- unused imports
+- obsolete files
+- unreachable branches
+- commented-out implementations
+- obsolete configuration
+- temporary debugging code
+
+Do not remove apparently unused public functionality without first understanding whether it has external consumers.
+
+---
+
+# 29. Magic Values
+
+Avoid unexplained literals when they represent domain rules.
+
+Bad:
+
+```ts
+if (retryCount > 7) {
+```
+
+Better:
+
+```ts
+const MAX_RETRY_ATTEMPTS = 7;
+```
+
+Best when appropriate:
+
+```ts
+retryPolicy.maxAttempts
+```
+
+The level of abstraction should match the importance and ownership of the value.
+
+Do not create constants for trivial local values where the literal is clearer.
+
+---
+
+# 30. Serialization and Transformation
+
+Keep transformations explicit.
+
+When mapping between:
+
+- API DTOs
+- domain objects
+- database models
+- external provider models
+
+make the transformation clear.
+
+Do not silently rely on accidental object compatibility when the structures represent different concepts.
+
+Avoid repeatedly transforming the same object through unnecessary layers.
+
+---
+
+# 31. Repeated Logic
+
+When logic appears repeatedly:
+
+1. Determine whether it represents the same semantic behavior.
+2. Identify its true ownership.
+3. Check whether an existing abstraction already exists.
+4. Decide whether reuse improves the design.
+5. Only then extract.
+
+Do not create generic helpers such as:
+
+```text
+processData()
+handleCommonThing()
+sharedHelper()
+genericUtility()
+```
+
+without a clear domain responsibility.
+
+---
+
+# 32. Temporary Code
+
+Temporary code must have a clear removal path.
+
+Do not leave:
+
+- debugging statements
+- experimental branches
+- temporary bypasses
+- hard-coded test values
+- commented-out implementations
+- disabled security checks
+
+in production code.
+
+If temporary behavior must remain temporarily, document:
+
+- why it exists
+- what depends on it
+- what removes it
+- any associated tracking reference where the project uses one
+
+---
+
+# 33. Generated Code
+
+Do not manually modify generated files unless the project explicitly requires it.
+
+Instead:
+
+1. Identify the generator.
+2. Modify the source definition.
+3. Regenerate the artifact.
+4. Verify the generated output.
+
+Generated code may legitimately violate normal file-size or formatting expectations.
+
+Do not refactor generated code manually merely to make it conform to ordinary source-code standards.
+
+---
+
+# 34. Framework Usage
+
+Use frameworks according to the project's established architecture.
+
+Do not allow framework conventions to dictate business architecture unnecessarily.
+
+Framework-specific code should remain close to framework boundaries where practical.
+
+Examples include:
+
+```text
+React components
+Next.js routing
+HTTP handlers
+ORM models
+database drivers
+cloud SDKs
+```
+
+Do not allow framework-specific details to spread through unrelated domain logic without a reason.
+
+---
+
+# 35. Code Duplication vs. Abstraction
+
+Use this decision sequence:
+
+```text
+Is the behavior identical?
+        │
+        ├── No → Keep separate
+        │
+        └── Yes
+             ↓
+      Is the concept shared?
+             │
+        ┌────┴────┐
+        ↓         ↓
+       No        Yes
+        │         │
+   Keep separate  ↓
+              Can reuse
+              simplify?
+                 │
+            ┌────┴────┐
+            ↓         ↓
+           No        Yes
+            │         │
+       Keep separate  Reuse
+```
+
+Do not optimize for eliminating every duplicated line.
+
+Optimize for eliminating duplicated **meaning**.
+
+---
+
+# 36. Reviewability
+
+Code should be easy to review.
+
+Prefer changes that:
+
+- have a clear purpose
+- use established patterns
+- avoid unrelated modifications
+- keep responsibilities localized
+- include relevant tests
+- make important decisions explicit
+
+A reviewer should be able to answer:
+
+```text
+What changed?
+Why did it change?
+Where does the behavior belong?
+What could it affect?
+How is it tested?
+```
+
+without reconstructing the entire system.
+
+---
+
+# 37. Maintainability Test
+
+Before finalizing a significant implementation, ask:
+
+### A new engineer joins tomorrow. Can they determine:
+
+- what this module owns?
+- why it exists?
+- what it depends on?
+- who consumes it?
+- what its public contract is?
+- how failures behave?
+- how it is tested?
+- where related behavior lives?
+
+If not, improve the structure, naming, boundaries, or documentation before adding more complexity.
+
+---
+
+# 38. Quality Gate
+
+Before considering production code complete, verify:
+
+- [ ] Naming communicates intent.
+- [ ] Responsibilities are cohesive.
+- [ ] No unnecessary duplication exists.
+- [ ] No premature abstraction exists.
+- [ ] Types are strong and meaningful.
+- [ ] External data is validated.
+- [ ] Side effects are explicit.
+- [ ] Errors are handled appropriately.
+- [ ] No dead or temporary code remains.
+- [ ] No unnecessary dependencies were introduced.
+- [ ] Public contracts remain intentional.
+- [ ] The implementation follows established architecture.
+- [ ] The code is understandable without excessive comments.
+- [ ] The resulting diff remains focused.
+
+---
+
+# 39. Final Principle
+
+Good KAMPYN code should feel unsurprising.
+
+An engineer should be able to open a file and understand:
+
+```text
+what it does
+why it exists
+what it owns
+what it depends on
+what it exposes
+what can fail
+```
+
+without needing to understand the entire repository first.
+
+> **Prefer clarity over cleverness.**
+> **Prefer cohesion over convenience.**
+> **Prefer semantic reuse over duplication.**
+> **Prefer explicit contracts over implicit behavior.**
+> **Prefer simple abstractions over elaborate ones.**
+> **Write code for the engineer who will maintain it next.**

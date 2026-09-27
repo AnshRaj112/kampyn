@@ -1,6 +1,1562 @@
 ---
-description: Backend-specific engineering guidance
-alwaysApply: false
+description: KAMPYN backend engineering rules covering Go services, application architecture, domain logic, repositories, concurrency, background workers, persistence, integrations, configuration, observability, and service lifecycle.
+alwaysApply: true
 ---
 
-Apply the repository's backend conventions together with `AGENTS.md` and the applicable `.ai/` policies.
+# KAMPYN — Backend Rules
+
+## 1. Purpose
+
+These rules define how KAMPYN backend services should be designed and implemented.
+
+The backend is responsible for:
+
+```text
+business logic
+data integrity
+authorization enforcement
+API orchestration
+persistence
+external integrations
+background processing
+events
+observability
+reliability
+```
+
+Backend code must remain:
+
+```text
+predictable
+testable
+concurrent-safe
+observable
+secure
+scalable
+maintainable
+```
+
+General architecture rules are defined in `01-architecture.mdc`.
+
+API-specific rules are defined in `api.mdc`.
+
+Security rules are defined in `04-security.mdc`.
+
+Performance rules are defined in `03-performance.mdc`.
+
+Testing rules are defined in `05-testing.mdc`.
+
+---
+
+# 2. Backend Technology
+
+KAMPYN backend services use Go where defined by the current project architecture.
+
+Follow the repository's established:
+
+```text
+Go version
+module structure
+frameworks
+database drivers
+ORM/query libraries
+logging system
+configuration system
+testing framework
+dependency injection approach
+```
+
+Do not introduce a new backend framework or architectural pattern without first checking the existing system and relevant `.ai/` policies.
+
+---
+
+# 3. Backend Architecture
+
+Use clear separation between:
+
+```text
+Transport / API
+        ↓
+Application
+        ↓
+Domain
+        ↓
+Infrastructure
+```
+
+The exact implementation may vary, but responsibilities must remain clear.
+
+### Transport
+
+Responsible for:
+
+```text
+HTTP
+request parsing
+validation
+authentication context
+response formatting
+HTTP-specific errors
+```
+
+### Application
+
+Responsible for:
+
+```text
+use cases
+orchestration
+transaction coordination
+authorization coordination
+workflow execution
+```
+
+### Domain
+
+Responsible for:
+
+```text
+business rules
+domain entities
+value objects
+state transitions
+domain invariants
+```
+
+### Infrastructure
+
+Responsible for:
+
+```text
+database
+cache
+queues
+external APIs
+object storage
+search
+messaging
+```
+
+Do not allow transport concerns to leak into domain logic.
+
+---
+
+# 4. Package Ownership
+
+Every backend package should have a clear responsibility.
+
+Prefer:
+
+```text
+orders/
+users/
+bookings/
+payments/
+inventory/
+search/
+authentication/
+```
+
+with cohesive internal structure.
+
+Avoid giant packages such as:
+
+```text
+utils/
+common/
+helpers/
+services/
+misc/
+```
+
+containing unrelated backend functionality.
+
+A package should make its ownership obvious.
+
+---
+
+# 5. Dependency Direction
+
+Dependencies should generally point inward:
+
+```text
+Transport
+    ↓
+Application
+    ↓
+Domain
+    ↑
+Infrastructure
+```
+
+Domain logic should not depend directly on:
+
+```text
+HTTP
+database drivers
+Redis
+OpenSearch
+cloud SDKs
+framework-specific request objects
+```
+
+Infrastructure implements interfaces required by higher-level application/domain code where that improves architectural independence.
+
+Do not create interfaces solely because "everything should be an interface."
+
+---
+
+# 6. Domain Logic
+
+Business rules belong in the domain/application layers rather than HTTP handlers or database repositories.
+
+Avoid:
+
+```go
+func HandleOrder(w http.ResponseWriter, r *http.Request) {
+    // validate
+    // calculate prices
+    // check inventory
+    // update database
+    // send notification
+    // format response
+}
+```
+
+Prefer:
+
+```text
+HTTP Handler
+     ↓
+Application Use Case
+     ↓
+Domain Rules
+     ↓
+Repositories / Integrations
+```
+
+Handlers should remain thin.
+
+---
+
+# 7. Application Services
+
+Application services coordinate use cases.
+
+They may:
+
+```text
+validate workflow prerequisites
+authorize operations
+load domain state
+invoke domain behavior
+coordinate repositories
+coordinate transactions
+publish events
+schedule background work
+```
+
+They should not become dumping grounds for unrelated business logic.
+
+If an application service becomes excessively large, identify the actual domain responsibilities.
+
+---
+
+# 8. Domain Entities
+
+Entities should protect their own important invariants where practical.
+
+Do not allow arbitrary external code to mutate sensitive state without going through appropriate domain behavior.
+
+Prefer:
+
+```text
+order.Cancel()
+booking.Confirm()
+payment.MarkFailed()
+inventory.Reserve()
+```
+
+when state transitions have meaningful business rules.
+
+Avoid unrestricted mutation such as:
+
+```text
+order.Status = "cancelled"
+```
+
+when the transition requires validation.
+
+---
+
+# 9. Value Objects
+
+Use value objects when a concept has meaningful validation or behavior.
+
+Examples:
+
+```text
+Money
+OrderID
+Email
+PhoneNumber
+Quantity
+Address
+BookingDate
+```
+
+Do not create a value object for every primitive.
+
+The abstraction should protect a real invariant or clarify domain meaning.
+
+---
+
+# 10. Interfaces
+
+Define interfaces around behavior and ownership.
+
+Prefer small interfaces:
+
+```go
+type OrderRepository interface {
+    FindByID(ctx context.Context, id OrderID) (*Order, error)
+    Save(ctx context.Context, order *Order) error
+}
+```
+
+over enormous interfaces containing unrelated methods.
+
+Define interfaces where they are consumed when appropriate.
+
+Do not create interfaces merely to make mocking easier.
+
+---
+
+# 11. Repository Pattern
+
+Repositories should abstract persistence concerns where the architecture calls for them.
+
+Repositories should handle:
+
+```text
+query construction
+persistence mapping
+database-specific behavior
+transaction participation
+persistence errors
+```
+
+Repositories should not contain unrelated business workflows.
+
+Avoid:
+
+```text
+OrderRepository.CreateOrderAndSendEmailAndUpdateInventory()
+```
+
+when those responsibilities belong to separate application operations.
+
+---
+
+# 12. Database Access
+
+Database access must follow the project's data architecture.
+
+Do not allow arbitrary database calls throughout the backend.
+
+Database access should have clear ownership.
+
+Consider:
+
+```text
+query efficiency
+indexes
+transactions
+connection management
+timeouts
+tenant isolation
+concurrency
+consistency
+```
+
+Follow the database-specific policies in the repository.
+
+---
+
+# 13. Transactions
+
+Transactions should correspond to meaningful consistency boundaries.
+
+A transaction should protect a coherent set of state changes.
+
+Avoid unnecessarily large transactions.
+
+Do not hold database transactions open while performing slow external network operations unless explicitly required.
+
+Where possible:
+
+```text
+validate
+    ↓
+begin transaction
+    ↓
+perform required state changes
+    ↓
+commit
+    ↓
+perform asynchronous external work
+```
+
+Use the project's established transaction abstraction.
+
+---
+
+# 14. Transaction Ownership
+
+The layer coordinating a business operation should generally control its transaction boundary.
+
+Avoid repositories silently starting nested transactions without clear semantics.
+
+Do not make transaction behavior implicit.
+
+A developer reading the use case should be able to determine:
+
+```text
+what is atomic
+what is not atomic
+what happens on failure
+```
+
+---
+
+# 15. Context
+
+Use `context.Context` for request-scoped cancellation, deadlines, and tracing.
+
+Prefer:
+
+```go
+func (s *OrderService) Create(ctx context.Context, input CreateOrderInput) error
+```
+
+over functions that have no way to propagate cancellation through I/O.
+
+Do not store request-specific context in long-lived structs.
+
+Do not use context as a general-purpose dependency container.
+
+---
+
+# 16. Context Propagation
+
+Propagate context through:
+
+```text
+HTTP
+application services
+repositories
+database calls
+external APIs
+queues
+background operations where applicable
+```
+
+Do not replace an existing request context with `context.Background()` inside request processing.
+
+Use background contexts only when intentionally detaching work from the originating request.
+
+---
+
+# 17. Timeouts
+
+Backend operations involving I/O should have appropriate deadlines.
+
+Apply timeouts to:
+
+```text
+HTTP clients
+database operations
+external providers
+search
+cache
+storage
+message brokers
+```
+
+Do not allow a dependency to block a request indefinitely.
+
+Timeout values should reflect actual operation requirements.
+
+---
+
+# 18. Error Handling
+
+Errors should preserve useful context.
+
+Prefer wrapping errors with meaningful context:
+
+```go
+return fmt.Errorf("create order: %w", err)
+```
+
+rather than discarding the original error.
+
+Do not expose internal errors directly through APIs.
+
+The transport layer should translate internal errors into the public API error contract.
+
+---
+
+# 19. Error Classification
+
+Distinguish between meaningful error categories where the application needs to react differently.
+
+Examples:
+
+```text
+not found
+validation failure
+conflict
+unauthorized
+forbidden
+dependency unavailable
+timeout
+internal failure
+```
+
+Avoid comparing arbitrary error strings throughout the application.
+
+Prefer typed or sentinel errors according to the repository's established conventions.
+
+---
+
+# 20. Panic
+
+Do not use `panic` for ordinary application errors.
+
+A panic may be appropriate for:
+
+```text
+unrecoverable programmer errors
+impossible initialization states
+explicitly documented startup failures
+```
+
+but should not replace normal error handling.
+
+Production request paths should not panic because of expected user or dependency failures.
+
+---
+
+# 21. Goroutines
+
+Every goroutine must have a clear lifecycle.
+
+Before starting a goroutine, identify:
+
+```text
+who owns it
+when it starts
+when it stops
+what cancels it
+what happens if it fails
+how errors are observed
+```
+
+Avoid fire-and-forget goroutines in request handlers.
+
+Bad:
+
+```go
+go sendNotification(order)
+return success
+```
+
+if the notification's lifecycle and failure behavior are undefined.
+
+---
+
+# 22. Goroutine Leaks
+
+Avoid goroutines that can remain blocked indefinitely.
+
+Common causes include:
+
+```text
+unread channels
+missing cancellation
+blocked network operations
+infinite loops
+unclosed resources
+workers without shutdown
+```
+
+Use:
+
+```text
+context cancellation
+bounded channels
+explicit shutdown
+timeouts
+```
+
+where appropriate.
+
+---
+
+# 23. Concurrency Safety
+
+Shared mutable state requires explicit synchronization or a design that avoids shared mutation.
+
+Consider:
+
+```text
+mutexes
+channels
+atomic operations
+immutable state
+ownership transfer
+database locking
+```
+
+Do not introduce synchronization without understanding the ownership model.
+
+Avoid global mutable state whenever practical.
+
+---
+
+# 24. Mutexes
+
+Use mutexes for clearly defined shared state.
+
+Keep critical sections small.
+
+Do not hold a mutex while performing slow external I/O unless explicitly required.
+
+Avoid lock ordering that can produce deadlocks.
+
+Document non-obvious locking requirements.
+
+---
+
+# 25. Channels
+
+Use channels when they represent meaningful communication or ownership transfer.
+
+Do not use channels merely because Go provides them.
+
+For simple protected state, a mutex may be clearer.
+
+Channels should have clear:
+
+```text
+sender
+receiver
+ownership
+closure behavior
+termination behavior
+```
+
+---
+
+# 26. Worker Pools
+
+Background worker pools should have bounded concurrency.
+
+Define:
+
+```text
+worker count
+queue capacity
+shutdown behavior
+retry behavior
+failure handling
+backpressure
+```
+
+Do not create an unlimited goroutine per incoming task.
+
+---
+
+# 27. Background Jobs
+
+Long-running or asynchronous work should use the project's background-job architecture.
+
+Examples include:
+
+```text
+email
+notifications
+search indexing
+analytics
+file processing
+report generation
+large imports
+external synchronization
+```
+
+Jobs should define:
+
+```text
+idempotency
+retry behavior
+timeouts
+failure handling
+dead-letter behavior where applicable
+observability
+```
+
+---
+
+# 28. Job Retries
+
+Retries must be bounded.
+
+Use appropriate:
+
+```text
+maximum attempts
+backoff
+jitter where appropriate
+failure classification
+dead-letter handling
+```
+
+Do not retry permanent failures indefinitely.
+
+Do not retry non-idempotent operations without protection against duplicate effects.
+
+---
+
+# 29. Events
+
+Events should represent meaningful domain or system facts.
+
+Prefer:
+
+```text
+OrderCreated
+OrderCancelled
+BookingConfirmed
+PaymentCompleted
+```
+
+over vague events such as:
+
+```text
+SomethingChanged
+ProcessData
+UpdateEverything
+```
+
+Event names should communicate what happened.
+
+---
+
+# 30. Event Payloads
+
+Event payloads should contain only what consumers require.
+
+Avoid putting:
+
+```text
+passwords
+tokens
+secrets
+unnecessary personal data
+internal database details
+```
+
+into events.
+
+Event schemas should be versioned or evolved according to the project's compatibility strategy.
+
+---
+
+# 31. Eventual Consistency
+
+When a workflow uses asynchronous processing, document and test the consistency model.
+
+For example:
+
+```text
+Primary database
+      ↓
+event
+      ↓
+OpenSearch
+```
+
+means search may temporarily lag behind authoritative state.
+
+Do not make synchronous assumptions about eventually consistent projections.
+
+---
+
+# 32. Idempotency
+
+Backend operations that may be retried must define idempotency behavior.
+
+Pay particular attention to:
+
+```text
+payments
+orders
+bookings
+webhooks
+events
+background jobs
+external synchronization
+```
+
+A retry should not unintentionally duplicate a business operation.
+
+---
+
+# 33. Authentication Context
+
+Authentication should be established once at the appropriate boundary.
+
+Pass trusted identity context inward rather than repeatedly decoding credentials inside business logic.
+
+Business logic should operate on a well-defined principal or authorization context.
+
+Do not pass raw HTTP headers deep into the application.
+
+---
+
+# 34. Authorization
+
+Backend authorization is authoritative.
+
+Every protected use case must enforce the appropriate permission.
+
+Do not rely solely on:
+
+```text
+route middleware
+```
+
+if the underlying operation can also be invoked through:
+
+```text
+background jobs
+internal services
+events
+SDKs
+other APIs
+```
+
+Authorization requirements should exist at the appropriate application boundary.
+
+---
+
+# 35. Multi-Tenancy
+
+Every tenant-scoped operation must preserve tenant isolation.
+
+Tenant context should be:
+
+```text
+validated
+trusted
+explicit
+propagated
+```
+
+Be especially careful with:
+
+```text
+repositories
+cache
+OpenSearch
+events
+background jobs
+analytics
+file storage
+```
+
+A tenant boundary must not disappear simply because execution moved to another subsystem.
+
+---
+
+# 36. Caching
+
+Cache access should have clear ownership.
+
+A cache layer should define:
+
+```text
+key
+TTL
+serialization
+invalidation
+consistency expectations
+failure behavior
+tenant isolation
+```
+
+Do not put cache-specific logic throughout unrelated domain code.
+
+A cache failure should follow the system's defined resilience model.
+
+---
+
+# 37. Redis
+
+When Redis is used, determine whether it is serving as:
+
+```text
+cache
+distributed lock
+rate limiter
+queue
+session store
+temporary state
+```
+
+Do not use Redis for a purpose that conflicts with its architectural role.
+
+Do not treat cached state as authoritative business state unless explicitly designed that way.
+
+---
+
+# 38. OpenSearch
+
+OpenSearch integrations should remain behind a search-specific abstraction.
+
+Application logic should not depend directly on OpenSearch client details.
+
+Search indexing should generally be treated as derived state unless the architecture explicitly defines otherwise.
+
+Search failures should not silently corrupt authoritative business state.
+
+---
+
+# 39. External Integrations
+
+External providers should be isolated behind adapters.
+
+An integration should define:
+
+```text
+authentication
+request mapping
+response mapping
+timeouts
+retries
+error classification
+idempotency
+observability
+```
+
+Do not spread provider-specific SDK types throughout the domain.
+
+---
+
+# 40. HTTP Clients
+
+HTTP clients should be configured centrally where appropriate.
+
+Define:
+
+```text
+base URL
+timeouts
+authentication
+retry policy
+connection behavior
+headers
+observability
+```
+
+Do not create ad-hoc HTTP clients throughout business logic.
+
+Always validate external responses before using them.
+
+---
+
+# 41. Configuration
+
+Backend configuration should be:
+
+```text
+typed
+validated
+centralized
+environment-aware
+explicit
+```
+
+Do not repeatedly access environment variables throughout application code.
+
+Prefer loading and validating configuration during startup.
+
+Fail fast when required configuration is invalid.
+
+---
+
+# 42. Graceful Shutdown
+
+Services must shut down cleanly.
+
+Shutdown should consider:
+
+```text
+HTTP server
+background workers
+message consumers
+database connections
+Redis connections
+OpenSearch clients
+external resources
+telemetry
+```
+
+A service should stop accepting new work before terminating resources required by in-flight operations.
+
+Use context cancellation and bounded shutdown deadlines.
+
+---
+
+# 43. Startup
+
+Startup should validate critical dependencies and configuration.
+
+Depending on the service, this may include:
+
+```text
+configuration
+database connectivity
+required migrations
+message broker
+cache
+search
+external provider configuration
+```
+
+Do not make startup unnecessarily dependent on optional services.
+
+Distinguish between:
+
+```text
+required dependency
+optional dependency
+degraded-mode dependency
+```
+
+where the architecture supports degraded operation.
+
+---
+
+# 44. Health Checks
+
+Backend services should expose appropriate health endpoints.
+
+Distinguish:
+
+```text
+liveness
+readiness
+dependency health
+```
+
+Do not make liveness fail merely because an optional dependency is unavailable.
+
+Do not expose sensitive diagnostic information through health endpoints.
+
+---
+
+# 45. Logging
+
+Use structured logging according to the project's logging architecture.
+
+Important backend logs should provide useful context such as:
+
+```text
+request ID
+correlation ID
+service
+operation
+error
+duration
+resource identifier where safe
+tenant context where safe
+```
+
+Never log:
+
+```text
+passwords
+tokens
+secrets
+private keys
+payment credentials
+```
+
+Avoid logging entire request bodies by default.
+
+---
+
+# 46. Metrics
+
+Backend services should expose meaningful metrics where required.
+
+Useful metrics include:
+
+```text
+request count
+request latency
+error rate
+dependency latency
+database latency
+queue depth
+job failures
+job duration
+cache hit/miss
+resource utilization
+```
+
+Metrics should support diagnosis and capacity planning.
+
+Do not create thousands of high-cardinality metric labels.
+
+---
+
+# 47. Tracing
+
+Distributed workflows should use tracing where the architecture supports it.
+
+Trace important boundaries:
+
+```text
+HTTP
+application use case
+database
+cache
+OpenSearch
+external APIs
+queues
+background jobs
+```
+
+Propagate trace context appropriately.
+
+Do not include sensitive data in traces.
+
+---
+
+# 48. Database Connection Management
+
+Database connections are finite resources.
+
+Use appropriate:
+
+```text
+connection pool limits
+timeouts
+idle connection settings
+lifetime settings
+```
+
+Avoid creating a new database connection for every request.
+
+Do not create unlimited database clients.
+
+---
+
+# 49. Resource Ownership
+
+Every external resource should have clear ownership.
+
+Examples:
+
+```text
+database client
+Redis client
+HTTP client
+file handle
+response body
+goroutine
+timer
+ticker
+subscription
+```
+
+The code responsible for acquiring a resource should clearly establish who releases it.
+
+Always close resources appropriately.
+
+---
+
+# 50. Serialization
+
+Use explicit serialization contracts.
+
+Be careful with:
+
+```text
+JSON
+database models
+external provider payloads
+events
+cache values
+```
+
+Do not serialize internal objects directly when doing so could expose fields that do not belong to the public contract.
+
+Handle malformed external data safely.
+
+---
+
+# 51. Time and Timezones
+
+Use explicit time semantics.
+
+Prefer:
+
+```text
+time.Time
+```
+
+and well-defined timezone behavior over manually manipulating timestamp strings.
+
+Define whether domain timestamps represent:
+
+```text
+UTC
+local campus time
+user timezone
+provider timezone
+```
+
+Do not silently mix timezone assumptions.
+
+For campus-specific functionality, timezone handling must be explicit.
+
+---
+
+# 52. IDs
+
+Use the project's established identifier strategy.
+
+IDs should be:
+
+```text
+consistent
+validated
+appropriately typed
+safe to expose where intended
+```
+
+Do not expose internal identifiers merely because they are convenient.
+
+Do not introduce multiple ID formats for the same domain concept without a strong reason.
+
+---
+
+# 53. File and Object Storage
+
+Backend services interacting with object storage should define:
+
+```text
+bucket/container ownership
+object naming
+access control
+content validation
+size limits
+retention
+deletion
+signed URL behavior
+```
+
+Do not expose unrestricted storage credentials to clients.
+
+Use short-lived access mechanisms where appropriate.
+
+---
+
+# 54. Large Data Processing
+
+For large datasets:
+
+```text
+stream
+chunk
+partition
+bound concurrency
+avoid unbounded memory
+```
+
+Do not load entire large datasets into memory unless explicitly justified.
+
+Long-running processing should generally be moved to background jobs rather than blocking HTTP requests.
+
+Follow `03-performance.mdc`.
+
+---
+
+# 55. Batch Processing
+
+Batch operations should define:
+
+```text
+batch size
+memory limits
+transaction boundaries
+failure behavior
+retry behavior
+progress
+observability
+```
+
+Do not process unbounded input in one operation.
+
+Use streaming or chunking where appropriate.
+
+---
+
+# 56. API Handlers
+
+API handlers should primarily:
+
+```text
+parse request
+validate request
+obtain authenticated context
+invoke application use case
+map result
+return response
+```
+
+Avoid putting substantial business logic in handlers.
+
+Handlers should not directly coordinate unrelated infrastructure components.
+
+---
+
+# 57. Dependency Injection
+
+Dependencies should be explicit.
+
+Prefer constructor injection:
+
+```go
+func NewOrderService(
+    repo OrderRepository,
+    payment PaymentProvider,
+    logger Logger,
+) *OrderService
+```
+
+over hidden global dependencies.
+
+Avoid service locators and global mutable dependency registries.
+
+Do not introduce a dependency-injection framework unless the repository architecture requires it.
+
+---
+
+# 58. Global State
+
+Avoid mutable global state.
+
+Global state creates:
+
+```text
+hidden dependencies
+test coupling
+race conditions
+lifecycle problems
+```
+
+Immutable global configuration may be acceptable when established by the architecture.
+
+Long-lived resources should have explicit ownership and lifecycle.
+
+---
+
+# 59. Package Initialization
+
+Avoid complex work inside `init()`.
+
+Do not perform:
+
+```text
+database connections
+network calls
+background goroutines
+large allocations
+```
+
+from package initialization unless explicitly required by the architecture.
+
+Prefer explicit startup initialization.
+
+---
+
+# 60. Go Error and Resource Patterns
+
+Follow idiomatic Go resource handling.
+
+Examples:
+
+```go
+resp, err := client.Do(req)
+if err != nil {
+    return err
+}
+defer resp.Body.Close()
+```
+
+Check errors deliberately.
+
+Do not ignore returned errors without a clear reason.
+
+Avoid excessive error wrapping that adds no useful context.
+
+---
+
+# 61. Goroutine Error Handling
+
+Errors from background goroutines must have an intentional destination.
+
+Possible mechanisms include:
+
+```text
+errgroup
+error channels
+worker supervision
+structured logging
+job failure state
+```
+
+Do not start goroutines whose errors disappear silently.
+
+---
+
+# 62. Testing
+
+Backend code should be tested at the appropriate level.
+
+Use:
+
+```text
+unit tests
+integration tests
+API tests
+database tests
+concurrency tests
+contract tests
+performance tests
+```
+
+where appropriate.
+
+Do not mock away the behavior being tested.
+
+Follow `05-testing.mdc`.
+
+---
+
+# 63. Backend Performance
+
+Backend performance should follow `03-performance.mdc`.
+
+Pay particular attention to:
+
+```text
+algorithmic complexity
+database queries
+N+1 queries
+serialization
+network calls
+memory allocation
+goroutine count
+connection pools
+cache behavior
+large payloads
+```
+
+Do not optimize without evidence when optimization adds meaningful complexity.
+
+---
+
+# 64. Backend Security
+
+Backend services are the authoritative security boundary.
+
+Before finalizing a backend feature, verify:
+
+- [ ] Authentication is correct.
+- [ ] Authorization is enforced.
+- [ ] Tenant isolation is preserved.
+- [ ] External input is validated.
+- [ ] Database queries are safe.
+- [ ] Sensitive information is protected.
+- [ ] Secrets are not exposed.
+- [ ] Logs do not contain sensitive data.
+- [ ] External integrations are validated.
+- [ ] Resource consumption is bounded.
+
+Follow `04-security.mdc`.
+
+---
+
+# 65. Backend Change Checklist
+
+Before considering backend work complete:
+
+- [ ] Architecture boundaries remain clear.
+- [ ] Domain logic is not embedded in transport code.
+- [ ] Dependencies are explicit.
+- [ ] Context is propagated correctly.
+- [ ] Errors are handled intentionally.
+- [ ] Goroutines have clear lifecycles.
+- [ ] Shared state is concurrency-safe.
+- [ ] Transactions have explicit ownership.
+- [ ] Database access is appropriately isolated.
+- [ ] Tenant boundaries are preserved.
+- [ ] Background work is bounded and observable.
+- [ ] External calls have timeouts.
+- [ ] Configuration is validated.
+- [ ] Graceful shutdown remains correct.
+- [ ] Logging and metrics are useful.
+- [ ] Tests cover important behavior and failure paths.
+- [ ] API contracts are preserved or intentionally versioned.
+- [ ] Documentation is updated where necessary.
+
+---
+
+# 66. Final Principle
+
+A KAMPYN backend service should be boring in the best possible way.
+
+An engineer should be able to determine:
+
+```text
+where a request enters
+where authentication happens
+where authorization happens
+where business rules live
+where data is stored
+where external calls happen
+where background work runs
+how failures propagate
+how resources are cleaned up
+how the service shuts down
+```
+
+without reconstructing the entire system.
+
+> **Keep handlers thin.**  
+> **Keep domain rules explicit.**  
+> **Keep dependencies visible.**  
+> **Propagate context.**  
+> **Bound concurrency and resource usage.**  
+> **Make transaction boundaries intentional.**  
+> **Treat backend authorization as authoritative.**  
+> **Give every goroutine and resource a clear owner.**  
+> **Design for failure, not only the happy path.**  
+> **Prefer simple, observable, testable services.**
+--- 

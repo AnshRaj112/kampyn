@@ -1,6 +1,1011 @@
 ---
-description: Architecture and dependency-direction guidance
-alwaysApply: false
+description: KAMPYN architecture, module boundaries, dependency direction, domain ownership, and system-level design rules.
+alwaysApply: true
 ---
 
-Follow the architecture, dependency-direction, cohesion, and scope rules in `AGENTS.md` and the applicable `.ai/` policies.
+# KAMPYN — Architecture Rules
+
+## 1. Purpose
+
+This rule defines the architectural boundaries and dependency direction for KAMPYN.
+
+It answers:
+
+- Where should code live?
+- Which layer owns a responsibility?
+- Which modules may depend on which other modules?
+- How should domains communicate?
+- Where should business logic reside?
+- When should a new abstraction or module be introduced?
+
+Detailed subsystem-specific architecture belongs under:
+
+```text
+.ai/architecture/
+```
+
+This file defines the architectural foundation.
+
+---
+
+# 2. Architectural Priorities
+
+KAMPYN architecture should optimize for:
+
+1. Correctness
+2. Clear ownership
+3. Maintainability
+4. Testability
+5. Security
+6. Scalability
+7. Operational simplicity
+
+Do not introduce architectural complexity merely because a system could theoretically require it in the future.
+
+Architecture should solve demonstrated requirements while preserving clean boundaries for future growth.
+
+---
+
+# 3. Separation of Responsibilities
+
+KAMPYN should maintain clear separation between:
+
+```text
+Presentation
+    ↓
+Application
+    ↓
+Domain
+    ↓
+Infrastructure
+```
+
+The exact implementation may differ between services and applications, but responsibilities must remain clearly separated.
+
+---
+
+## 3.1 Presentation
+
+Presentation is responsible for interacting with external consumers.
+
+Examples:
+
+- marketing UI
+- web UI
+- mobile UI
+- HTTP handlers
+- controllers
+- API route handlers
+- request/response mapping
+
+Presentation code should:
+
+- receive input
+- perform boundary validation
+- establish request context
+- invoke the appropriate application behavior
+- map results to external contracts
+- return appropriate responses
+
+Presentation code should not contain substantial business logic.
+
+---
+
+## 3.2 Application
+
+The application layer coordinates use cases.
+
+It is responsible for:
+
+- orchestrating domain operations
+- coordinating repositories
+- managing use-case boundaries
+- controlling application workflows
+- coordinating transactions where appropriate
+- invoking external capabilities through defined interfaces
+
+Application services should not become generic "do everything" services.
+
+Each application service should represent a coherent use case or responsibility.
+
+---
+
+## 3.3 Domain
+
+The domain contains business rules and concepts.
+
+Domain logic should represent:
+
+- business rules
+- domain invariants
+- domain entities
+- domain value objects
+- domain policies
+- domain-level state transitions
+
+Domain logic should not unnecessarily depend on:
+
+- HTTP frameworks
+- UI frameworks
+- databases
+- cloud providers
+- external APIs
+- infrastructure implementations
+
+The domain should remain as independent as practical.
+
+---
+
+## 3.4 Infrastructure
+
+Infrastructure implements technical capabilities.
+
+Examples:
+
+- PostgreSQL repositories
+- MongoDB repositories
+- Redis clients
+- OpenSearch clients
+- cloud storage
+- payment providers
+- email providers
+- external APIs
+- message brokers
+- telemetry systems
+
+Infrastructure should implement interfaces or contracts defined by the appropriate higher-level layer when dependency inversion is appropriate.
+
+Infrastructure details should not leak unnecessarily into domain logic.
+
+---
+
+# 4. Dependency Direction
+
+Dependencies should generally point toward stable abstractions.
+
+Preferred direction:
+
+```text
+┌─────────────────────┐
+│     Presentation    │
+└──────────┬──────────┘
+           ↓
+┌─────────────────────┐
+│     Application     │
+└──────────┬──────────┘
+           ↓
+┌─────────────────────┐
+│       Domain        │
+└──────────┬──────────┘
+           ↓
+┌─────────────────────┐
+│   Infrastructure    │
+└─────────────────────┘
+```
+
+The implementation may use dependency inversion where necessary so that higher-level policies do not depend directly on infrastructure details.
+
+The important rule is:
+
+> Technical implementation details must not determine business rules.
+
+---
+
+# 5. Domain Boundaries
+
+KAMPYN contains multiple business domains.
+
+Examples may include:
+
+- users
+- authentication
+- food courts
+- vendors
+- menus
+- items
+- orders
+- payments
+- inventory
+- hostels
+- bookings
+- transportation
+- library
+- guest house
+- complaints
+- notifications
+- administration
+
+The exact domain list is defined by the current product architecture.
+
+Each domain should own its:
+
+- business rules
+- models
+- services
+- validation
+- persistence behavior
+- domain-specific tests
+
+where appropriate.
+
+Do not create a single global module containing unrelated business logic.
+
+---
+
+# 6. Domain Ownership
+
+Every piece of business logic should have a clear owner.
+
+For example:
+
+```text
+Order
+├── order creation rules
+├── order state transitions
+├── cancellation rules
+└── order-specific validation
+
+Inventory
+├── stock rules
+├── reservation rules
+├── inventory mutations
+└── inventory-specific validation
+```
+
+Do not allow another domain to directly modify another domain's internal state.
+
+Prefer an explicit interaction:
+
+```text
+Domain A
+   ↓
+Public Application Interface
+   ↓
+Domain B
+```
+
+or:
+
+```text
+Domain A
+   ↓
+Event / Command
+   ↓
+Domain B
+```
+
+depending on the architectural requirement.
+
+---
+
+# 7. Cross-Domain Communication
+
+Domains should communicate through intentional contracts.
+
+Acceptable mechanisms include:
+
+- application services
+- interfaces
+- commands
+- events
+- APIs
+- message queues
+
+Choose the simplest mechanism that satisfies the requirement.
+
+Do not introduce event-driven architecture merely because it appears more scalable.
+
+Do not introduce direct database access between domains as a shortcut.
+
+For example, avoid:
+
+```text
+Order Service
+      ↓
+Inventory Database
+```
+
+when the inventory domain owns the inventory behavior.
+
+Prefer:
+
+```text
+Order Service
+      ↓
+Inventory Application Interface
+      ↓
+Inventory Domain
+```
+
+or an appropriate event/command boundary.
+
+---
+
+# 8. Shared Code
+
+Shared code must represent genuinely shared concepts.
+
+Prefer domain-specific shared packages over generic utility dumping grounds.
+
+Good:
+
+```text
+packages/
+├── validation/
+├── authentication/
+├── authorization/
+├── payments/
+├── search/
+├── observability/
+└── contracts/
+```
+
+Avoid:
+
+```text
+packages/
+└── utils/
+    ├── everything.ts
+    ├── helpers.ts
+    ├── common.ts
+    └── misc.ts
+```
+
+A shared module should have:
+
+- clear ownership
+- a clear purpose
+- stable behavior
+- multiple legitimate consumers
+
+Do not move code into a shared package merely because two files currently import it.
+
+---
+
+# 9. Frontend Architecture
+
+Frontend architecture must preserve separation between:
+
+```text
+UI
+↓
+Client/Application State
+↓
+Server State
+↓
+API Contracts
+↓
+Backend
+```
+
+Frontend components should not contain:
+
+- direct database access
+- infrastructure logic
+- authentication implementation details
+- large business workflows
+- unrelated state management
+
+Use the project's established frontend policies for:
+
+- Next.js
+- React
+- TypeScript
+- Zustand
+- TanStack Query
+- Zod
+- styling
+- component architecture
+
+Do not introduce a second state-management or data-fetching architecture without explicit justification.
+
+---
+
+# 10. Backend Architecture
+
+Backend services should preserve clear separation between:
+
+```text
+Transport
+    ↓
+Application
+    ↓
+Domain
+    ↓
+Persistence / Infrastructure
+```
+
+For HTTP services:
+
+```text
+Request
+  ↓
+Handler / Controller
+  ↓
+Validation
+  ↓
+Authorization
+  ↓
+Application Service
+  ↓
+Domain Logic
+  ↓
+Repository / Infrastructure
+  ↓
+Response
+```
+
+Handlers should remain thin.
+
+Handlers should not contain:
+
+- complex business rules
+- database implementation
+- large data transformations
+- unrelated workflows
+
+Services should not become god objects.
+
+Repositories should not contain business workflows.
+
+---
+
+# 11. Repository Boundaries
+
+Repositories are responsible for persistence concerns.
+
+A repository may:
+
+- retrieve data
+- persist data
+- update data
+- delete data
+- perform appropriate persistence-level queries
+
+A repository should not decide business policy.
+
+Avoid:
+
+```text
+Repository
+    ↓
+Business decision
+    ↓
+Another service
+```
+
+Prefer:
+
+```text
+Application / Domain
+    ↓
+Business decision
+    ↓
+Repository
+    ↓
+Persistence
+```
+
+Repositories should expose meaningful operations rather than leaking raw database mechanics throughout the application.
+
+---
+
+# 12. Database Independence
+
+Business logic should not unnecessarily depend on a specific database.
+
+Avoid spreading:
+
+```text
+PostgreSQL-specific behavior
+MongoDB-specific behavior
+Redis-specific behavior
+OpenSearch-specific behavior
+```
+
+through domain logic.
+
+Database-specific behavior belongs in the appropriate infrastructure/data-access boundary.
+
+However, do not force artificial database abstraction where database-specific capabilities are an intentional part of the architecture.
+
+Abstraction should serve the architecture rather than exist for theoretical purity.
+
+---
+
+# 13. Source of Truth
+
+Every important piece of data must have a clearly defined authoritative source.
+
+For example:
+
+```text
+Primary Database
+      │
+      ├── Cache
+      ├── Search Index
+      ├── Analytics
+      └── Derived Views
+```
+
+Derived systems should not silently become authoritative.
+
+In particular:
+
+```text
+Search Index ≠ Primary Database
+Cache ≠ Primary Database
+Analytics Store ≠ Transactional Source of Truth
+```
+
+Unless an architectural decision explicitly defines otherwise.
+
+---
+
+# 14. Search Architecture
+
+Search infrastructure should generally be treated as a derived projection of authoritative application data.
+
+For OpenSearch:
+
+```text
+Authoritative Data
+       ↓
+Indexing Pipeline
+       ↓
+OpenSearch
+       ↓
+Search / Discovery
+```
+
+Application workflows must not assume that a search index is always perfectly synchronized unless the architecture explicitly guarantees that property.
+
+Search failures should be handled according to the consistency requirements of the feature.
+
+Do not duplicate authoritative business state inside search documents merely for convenience.
+
+---
+
+# 15. Caching Architecture
+
+Caching is an optimization layer unless explicitly defined otherwise.
+
+Preferred model:
+
+```text
+Request
+  ↓
+Cache
+  ├── HIT → Response
+  │
+  └── MISS
+       ↓
+   Source of Truth
+       ↓
+     Cache
+       ↓
+    Response
+```
+
+Every cache should have a defined:
+
+- key strategy
+- expiration strategy
+- invalidation strategy
+- ownership
+- consistency expectation
+- failure behavior
+
+Do not introduce caching without understanding invalidation.
+
+Do not allow cache state to silently become the authoritative business state.
+
+---
+
+# 16. Authentication and Authorization
+
+Authentication and authorization are cross-cutting security concerns.
+
+Do not implement authentication independently inside individual domains.
+
+Authentication should establish trusted identity.
+
+Authorization should determine access to resources and operations.
+
+Domain-specific authorization rules should remain close to the business operation they protect while using the project's centralized identity and authorization mechanisms.
+
+Never trust client-provided:
+
+- user identity
+- role
+- tenant
+- permissions
+- ownership
+
+without server-side verification.
+
+---
+
+# 17. Multi-Tenancy
+
+Where KAMPYN operates in a multi-tenant environment, tenant isolation is an architectural boundary.
+
+Tenant context should be established from a trusted source.
+
+Do not rely solely on:
+
+```text
+tenantId supplied by the client
+```
+
+for authorization or data isolation.
+
+Tenant-scoped operations must consistently enforce tenant boundaries.
+
+Any architectural change affecting tenant isolation requires explicit review.
+
+A tenant must never be able to access another tenant's data through:
+
+- APIs
+- repositories
+- search
+- caching
+- background jobs
+- events
+- exports
+- administrative operations
+
+---
+
+# 18. Events and Asynchronous Processing
+
+Events should represent meaningful facts or commands.
+
+Avoid creating events merely to make code appear decoupled.
+
+An event should have:
+
+- clear ownership
+- defined schema
+- defined producer
+- defined consumers
+- versioning strategy where required
+- retry behavior
+- failure behavior
+- idempotency expectations
+
+Consumers must not assume an event is delivered exactly once.
+
+Asynchronous workflows should explicitly consider:
+
+```text
+retry
+duplication
+ordering
+failure
+timeout
+dead-letter behavior
+idempotency
+```
+
+---
+
+# 19. External Integrations
+
+External services must be isolated behind appropriate boundaries.
+
+Examples:
+
+```text
+Application
+    ↓
+Provider Interface
+    ↓
+Provider Adapter
+    ↓
+External Service
+```
+
+Avoid spreading provider-specific SDK calls throughout business logic.
+
+External integrations should define:
+
+- authentication
+- timeout behavior
+- retry behavior
+- error mapping
+- rate limits
+- idempotency
+- observability
+- fallback behavior where appropriate
+
+Do not allow an external provider's response model to become an accidental internal domain model.
+
+---
+
+# 20. Transactions
+
+Transaction boundaries belong around operations that require atomicity.
+
+Transactions should be:
+
+- explicit
+- short-lived
+- limited to required operations
+
+Do not hold database transactions across:
+
+- external HTTP calls
+- payment providers
+- long-running computation
+- user interaction
+- arbitrary asynchronous processing
+
+If a workflow spans multiple systems, use an appropriate consistency strategy rather than assuming a single database transaction can provide atomicity across them.
+
+---
+
+# 21. Concurrency
+
+Concurrency must have clear ownership.
+
+Before introducing concurrent execution, determine:
+
+- what is being parallelized
+- why parallelism is useful
+- resource limits
+- cancellation behavior
+- failure propagation
+- shared-state behavior
+- lifecycle
+- cleanup
+
+Do not introduce concurrency simply because the language or framework makes it easy.
+
+Concurrency should improve the system without introducing uncontrolled resource consumption or race conditions.
+
+---
+
+# 22. Background Jobs
+
+Background jobs are separate execution contexts.
+
+Each job should have clearly defined:
+
+- input
+- ownership
+- execution semantics
+- retry policy
+- timeout
+- cancellation
+- idempotency
+- failure handling
+- observability
+
+Do not place arbitrary business logic directly inside job runners.
+
+Prefer:
+
+```text
+Job Runner
+    ↓
+Application Service
+    ↓
+Domain
+```
+
+This keeps business behavior testable outside the job infrastructure.
+
+---
+
+# 23. Configuration
+
+Configuration should have clear ownership.
+
+Separate:
+
+```text
+Code
+Configuration
+Secrets
+Runtime State
+```
+
+Do not hard-code environment-specific behavior into business logic.
+
+Configuration should be:
+
+- validated
+- typed where supported
+- explicit
+- environment-aware
+- documented when non-obvious
+
+Do not silently introduce new environment variables without updating the appropriate configuration documentation.
+
+---
+
+# 24. API Boundary
+
+External APIs are architectural boundaries.
+
+The API layer should define:
+
+- request contracts
+- response contracts
+- authentication requirements
+- authorization requirements
+- validation
+- error contracts
+- pagination
+- filtering
+- versioning where necessary
+
+Do not expose internal domain or persistence models directly.
+
+Prefer explicit DTOs or contracts where transformation is required.
+
+---
+
+# 25. Dependency Injection
+
+Dependencies should be explicit.
+
+Prefer:
+
+```text
+Constructor
+    ↓
+Dependencies
+    ↓
+Implementation
+```
+
+over hidden global state.
+
+Avoid:
+
+- service locators
+- global mutable dependencies
+- implicit initialization
+- hidden database clients
+- hidden network clients
+
+Dependency injection should improve testability and ownership.
+
+Do not introduce a dependency injection framework merely because one exists.
+
+---
+
+# 26. Module Boundaries
+
+A module should expose only what other modules legitimately need.
+
+Prefer:
+
+```text
+Public Interface
+    ↓
+Internal Implementation
+```
+
+over exposing every internal detail.
+
+Do not import another module's private implementation merely because it is technically accessible.
+
+If another module requires internal functionality, consider whether:
+
+- the public interface is incomplete
+- the responsibility belongs elsewhere
+- a new application boundary is required
+
+---
+
+# 27. Circular Dependencies
+
+Circular dependencies are architectural warnings.
+
+Avoid:
+
+```text
+A → B
+B → A
+```
+
+and more complex cycles such as:
+
+```text
+A → B → C → A
+```
+
+When a cycle appears:
+
+1. Determine the actual shared responsibility.
+2. Identify the dependency causing the cycle.
+3. Move shared stable abstractions to the appropriate boundary.
+4. Invert the dependency where appropriate.
+5. Avoid creating a generic "common" module merely to hide the cycle.
+
+Do not solve architectural cycles by indiscriminately moving everything into shared utilities.
+
+---
+
+# 28. New Modules and Services
+
+Do not create a new service, package, or domain merely because the existing module is becoming inconvenient.
+
+Before creating one, establish:
+
+- clear ownership
+- clear responsibility
+- independent lifecycle or scaling requirement
+- meaningful deployment boundary
+- meaningful security boundary
+- meaningful data ownership
+- meaningful operational benefit
+
+If these do not exist, prefer improving the existing module.
+
+Distributed systems introduce operational cost. Do not distribute code without a reason.
+
+---
+
+# 29. Architectural Changes
+
+Before making a substantial architectural change:
+
+1. Identify the current architecture.
+2. Identify the problem with the current approach.
+3. Identify existing alternatives inside the repository.
+4. Determine the impact.
+5. Determine migration requirements.
+6. Determine testing requirements.
+7. Determine operational implications.
+8. Check whether an ADR is required.
+
+Do not silently establish a new architectural precedent.
+
+---
+
+# 30. Architectural Decision Rule
+
+When choosing between two valid approaches, prefer the option that:
+
+- has fewer unnecessary moving parts
+- preserves clear ownership
+- reduces coupling
+- remains testable
+- is consistent with the existing architecture
+- can scale to the known requirements
+- is operationally understandable
+- is reversible when practical
+
+Do not choose an architecture solely because it is fashionable, theoretically perfect, or more complex.
+
+---
+
+# 31. Final Architectural Principle
+
+KAMPYN should be understandable as a system, not merely as a collection of files.
+
+Every major piece of code should have a clear answer to:
+
+```text
+What does this own?
+Why does it exist?
+Who is allowed to use it?
+What does it depend on?
+What depends on it?
+Where does its data come from?
+Where does its data go?
+What happens when it fails?
+How is it tested?
+```
+
+If those answers are unclear, the architecture should be clarified before adding more complexity.
+
+> **Clear ownership over convenience.  
+> Explicit boundaries over hidden coupling.  
+> Stable contracts over internal leakage.  
+> Simple architecture over speculative complexity.  
+> Domain responsibility over technical convenience.**

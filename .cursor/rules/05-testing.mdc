@@ -1,6 +1,1278 @@
 ---
-description: Testing and verification guidance
-alwaysApply: false
+description: KAMPYN testing rules covering test strategy, unit tests, integration tests, API tests, database tests, frontend tests, end-to-end tests, security testing, performance testing, test isolation, fixtures, mocks, and verification.
+alwaysApply: true
 ---
 
-Follow the testing, regression-coverage, formatting, linting, type-checking, and verification rules in `AGENTS.md` and the applicable `.ai/` policies.
+# KAMPYN — Testing Rules
+
+## 1. Purpose
+
+These rules define how KAMPYN code should be tested.
+
+Testing is part of implementation, not a separate activity performed after coding.
+
+Tests should provide confidence that:
+
+- behavior is correct
+- contracts are preserved
+- regressions are prevented
+- failures are handled correctly
+- security boundaries remain intact
+- important architectural behavior remains stable
+
+General engineering rules are defined in `AGENTS.md`.
+
+Architecture rules are defined in `01-architecture.mdc`.
+
+Code-quality rules are defined in `02-code-quality.mdc`.
+
+Performance rules are defined in `03-performance.mdc`.
+
+Security rules are defined in `04-security.mdc`.
+
+---
+
+# 2. Testing Principles
+
+Prefer:
+
+```text
+behavior over implementation
+deterministic tests
+isolated tests
+meaningful assertions
+realistic boundaries
+small test scope
+fast feedback
+high-value coverage
+```
+
+Avoid:
+
+```text
+tests that only exercise lines
+fragile tests
+implementation-detail assertions
+unnecessary mocks
+shared mutable test state
+randomness without control
+tests that depend on execution order
+```
+
+A test should fail when meaningful behavior breaks.
+
+---
+
+# 3. Test the Contract
+
+Tests should primarily verify observable behavior.
+
+For each feature, identify:
+
+```text
+input
+expected behavior
+output
+side effects
+failure behavior
+security boundaries
+```
+
+Do not write tests merely because a function exists.
+
+Write tests because a behavior matters.
+
+---
+
+# 4. Test Pyramid
+
+Prefer an appropriate distribution of:
+
+```text
+             E2E
+          Integration
+       Component / API
+          Unit Tests
+```
+
+Use the lowest test level that can confidently verify the behavior.
+
+Prefer unit tests for:
+
+- pure business logic
+- transformations
+- validation rules
+- algorithms
+- deterministic calculations
+
+Prefer integration tests for:
+
+- repositories
+- database behavior
+- service boundaries
+- API contracts
+- queues
+- external integration adapters
+
+Prefer end-to-end tests for:
+
+- critical user journeys
+- cross-system workflows
+- authentication flows
+- high-value business paths
+
+Do not make every behavior an E2E test.
+
+---
+
+# 5. Testability
+
+Production code should be structured so important behavior can be tested without excessive setup.
+
+Good testability usually comes from:
+
+- clear boundaries
+- explicit dependencies
+- deterministic behavior
+- small cohesive modules
+- dependency injection where appropriate
+- isolated side effects
+
+Do not introduce production abstractions solely to satisfy a test unless the abstraction also represents a legitimate architectural boundary.
+
+---
+
+# 6. Unit Tests
+
+Unit tests should verify a small, meaningful unit of behavior.
+
+Good candidates include:
+
+```text
+domain rules
+calculations
+parsers
+validators
+transformations
+state transitions
+algorithms
+pure functions
+```
+
+A unit test should generally be:
+
+- fast
+- deterministic
+- isolated
+- easy to diagnose
+
+Avoid testing private implementation details.
+
+If internal implementation changes while behavior remains correct, the test should usually remain valid.
+
+---
+
+# 7. Integration Tests
+
+Integration tests should verify that components work correctly together.
+
+Use them for behavior involving:
+
+- databases
+- repositories
+- queues
+- caches
+- HTTP boundaries
+- authentication infrastructure
+- external service adapters
+- serialization
+- persistence
+
+Integration tests should use realistic interfaces.
+
+Do not mock the exact dependency being tested.
+
+For example, a repository integration test should generally exercise the actual database mechanism rather than mocking the database client.
+
+---
+
+# 8. API Tests
+
+API tests should verify the complete contract of important endpoints.
+
+Test:
+
+```text
+authentication
+authorization
+validation
+success responses
+error responses
+status codes
+response shape
+pagination
+filtering
+sorting
+idempotency
+tenant isolation
+```
+
+For protected endpoints, include tests for:
+
+```text
+unauthenticated request
+authenticated but unauthorized request
+authorized request
+cross-resource access
+cross-tenant access where applicable
+```
+
+Do not test only the happy path.
+
+---
+
+# 9. Database Tests
+
+Database behavior must be tested at the appropriate integration level.
+
+Test important:
+
+- queries
+- constraints
+- indexes where behavior depends on them
+- transactions
+- unique constraints
+- foreign-key behavior where applicable
+- pagination
+- filtering
+- concurrency-sensitive operations
+- migrations
+
+Do not rely entirely on mocked repositories to prove database correctness.
+
+If production behavior depends on database semantics, test against a representative database environment.
+
+---
+
+# 10. Transactions
+
+When business behavior depends on transaction boundaries, tests must verify those boundaries.
+
+Test cases should include:
+
+```text
+successful transaction
+failure before commit
+failure during transaction
+rollback behavior
+partial-operation prevention
+```
+
+A test should verify that a failed operation does not leave invalid persistent state.
+
+---
+
+# 11. Concurrency
+
+Concurrency-sensitive code requires concurrency-focused tests.
+
+Where relevant, test:
+
+```text
+duplicate requests
+simultaneous updates
+race conditions
+lock behavior
+idempotency
+duplicate event delivery
+retry behavior
+```
+
+Do not assume sequential tests prove concurrent correctness.
+
+When possible, make concurrency tests deterministic rather than relying on arbitrary sleeps.
+
+---
+
+# 12. Idempotency
+
+Operations that are intended to be idempotent must have tests proving that property.
+
+For example:
+
+```text
+same request once
+same request twice
+same request many times
+retry after partial failure
+duplicate event
+```
+
+Expected behavior should remain consistent with the operation's contract.
+
+Payment, booking, order, webhook, and background-job workflows should receive particular attention where idempotency is required.
+
+---
+
+# 13. Error Testing
+
+Every meaningful failure path does not need a separate test, but important failure behavior must be covered.
+
+Test:
+
+```text
+invalid input
+missing required data
+not found
+unauthorized
+forbidden
+conflict
+dependency failure
+database failure
+timeout
+malformed external response
+unexpected state
+```
+
+Verify both:
+
+```text
+observable response
+persistent side effects
+```
+
+A test that checks only the returned error may miss corrupted state.
+
+---
+
+# 14. Negative Testing
+
+Negative tests are first-class tests.
+
+For security-sensitive or business-critical behavior, explicitly test what must **not** happen.
+
+Examples:
+
+```text
+user cannot access another user's order
+tenant A cannot access tenant B data
+unauthorized user cannot modify inventory
+invalid payment state cannot be forced
+malformed input cannot bypass validation
+expired credentials cannot access protected resources
+```
+
+Do not only test successful behavior.
+
+---
+
+# 15. Security Testing
+
+Security-sensitive changes require tests aligned with the security rules.
+
+Test relevant:
+
+- authentication boundaries
+- authorization
+- resource ownership
+- tenant isolation
+- input validation
+- injection resistance
+- rate limiting
+- session behavior
+- file upload restrictions
+- webhook verification
+- sensitive-data exposure
+
+Security tests should prove that prohibited behavior is rejected.
+
+---
+
+# 16. Frontend Component Tests
+
+Frontend tests should focus on user-visible behavior and meaningful component contracts.
+
+Test:
+
+```text
+rendering
+user interactions
+loading states
+error states
+empty states
+success states
+accessibility-critical behavior
+permission-dependent UI
+form validation
+```
+
+Avoid testing implementation details such as:
+
+```text
+internal hook calls
+specific component state variables
+exact internal function calls
+DOM structure that is irrelevant to behavior
+```
+
+Prefer testing what the user can observe or interact with.
+
+---
+
+# 17. React and Next.js Testing
+
+For React/Next.js code:
+
+- test meaningful component behavior
+- test server/client boundaries where relevant
+- test loading and error states
+- test forms and validation
+- test navigation behavior
+- test data-fetching states
+- test authorization-dependent rendering
+
+Do not make tests depend unnecessarily on framework internals.
+
+When behavior belongs to a server-side boundary, test that boundary appropriately rather than pretending it is purely client-side behavior.
+
+---
+
+# 18. State Management Tests
+
+When using Zustand or other client-state mechanisms, test meaningful state transitions.
+
+Test:
+
+```text
+initial state
+valid state transitions
+invalid transitions
+reset behavior
+persistence behavior where applicable
+cross-component effects where meaningful
+```
+
+Do not test every implementation detail of the store.
+
+For TanStack Query, test meaningful server-state behavior where application logic depends on:
+
+```text
+loading
+success
+error
+retry
+invalidations
+refetch behavior
+optimistic updates
+```
+
+Do not duplicate framework behavior in application tests.
+
+---
+
+# 19. Form Testing
+
+Forms should test:
+
+```text
+valid input
+invalid input
+required fields
+boundary values
+submission
+server validation failures
+loading state
+success state
+error state
+```
+
+Validation should be tested at both appropriate boundaries:
+
+```text
+frontend
+backend
+```
+
+Do not rely on frontend validation as the security boundary.
+
+---
+
+# 20. Mocking
+
+Mock only what needs to be isolated.
+
+Good candidates:
+
+```text
+external APIs
+payment providers
+email providers
+cloud services
+time
+randomness
+unavailable infrastructure
+```
+
+Avoid mocking:
+
+```text
+pure business logic
+simple internal functions
+the code under test
+everything in the dependency graph
+```
+
+Excessive mocking creates tests that pass while the real system is broken.
+
+---
+
+# 21. Mock Boundaries, Not Internals
+
+Prefer mocking at architectural boundaries.
+
+For example:
+
+```text
+Application Service
+        ↓
+Payment Provider Adapter
+        ↓
+External Payment System
+```
+
+Mock the payment provider boundary.
+
+Do not mock dozens of internal functions inside the application service.
+
+Tests should remain valid when internal implementation is refactored.
+
+---
+
+# 22. Test Doubles
+
+Use the simplest appropriate test double:
+
+```text
+stub
+fake
+mock
+spy
+```
+
+Understand the difference between them.
+
+Prefer fakes or realistic local implementations when they provide stronger behavioral confidence than heavily configured mocks.
+
+Do not introduce a complex test-double framework for trivial behavior.
+
+---
+
+# 23. Fixtures
+
+Fixtures should be:
+
+- minimal
+- explicit
+- reusable where appropriate
+- representative
+- easy to understand
+
+Avoid enormous default fixtures containing dozens of unrelated fields.
+
+Prefer focused builders or factories when test data has meaningful variation.
+
+Example:
+
+```text
+createTestUser()
+createTestOrder()
+createTestBooking()
+```
+
+Factories should not hide important test conditions.
+
+---
+
+# 24. Test Data
+
+Test data should represent meaningful scenarios.
+
+Include:
+
+```text
+normal values
+boundary values
+empty values
+large values
+invalid values
+duplicate values
+special characters
+unicode
+unexpected ordering
+missing relationships
+```
+
+Do not use production personal data for tests.
+
+Use synthetic or appropriately anonymized data.
+
+---
+
+# 25. Boundary Testing
+
+Important boundaries require explicit tests.
+
+Examples:
+
+```text
+minimum value
+maximum value
+just below minimum
+just above maximum
+empty collection
+single element
+large collection
+missing field
+additional field
+duplicate record
+```
+
+For algorithms, test meaningful edge cases rather than only ordinary inputs.
+
+---
+
+# 26. Time-Dependent Code
+
+Time-dependent behavior must be deterministic.
+
+Avoid tests that depend directly on the machine's current clock.
+
+Control time where necessary.
+
+Test:
+
+```text
+before boundary
+at boundary
+after boundary
+timezone-sensitive behavior
+expiration
+scheduled behavior
+```
+
+Use explicit timestamps in tests whenever practical.
+
+---
+
+# 27. Randomness
+
+Random behavior must be controllable in tests.
+
+Do not rely on uncontrolled randomness for assertions.
+
+Where randomness affects behavior:
+
+- inject a random source where appropriate
+- seed deterministic generators
+- assert invariants rather than exact random output when appropriate
+
+Tests must not become flaky because of randomness.
+
+---
+
+# 28. External Services
+
+Do not make ordinary automated tests depend on live third-party services.
+
+Tests should generally use:
+
+```text
+fake
+mock
+local emulator
+containerized dependency
+contract test
+```
+
+according to the integration.
+
+Live external tests may exist separately when necessary.
+
+They must not be required for ordinary local development unless explicitly designed that way.
+
+---
+
+# 29. Contract Testing
+
+When KAMPYN integrates with external systems or independently deployed services, consider contract tests.
+
+Verify:
+
+```text
+request shape
+response shape
+required fields
+error behavior
+authentication assumptions
+version compatibility
+```
+
+Do not assume documentation alone guarantees an external contract.
+
+---
+
+# 30. Event and Message Testing
+
+For asynchronous systems, test:
+
+```text
+event creation
+event schema
+consumer behavior
+duplicate delivery
+out-of-order delivery where possible
+retry behavior
+dead-letter behavior
+failure recovery
+idempotency
+```
+
+Consumers should not depend on events being delivered exactly once unless the infrastructure explicitly guarantees it.
+
+---
+
+# 31. File Processing Tests
+
+For file-based workflows, test:
+
+```text
+empty files
+single-record files
+large files
+malformed files
+unsupported formats
+unexpected delimiters
+quoted fields
+unicode
+encoding differences
+duplicate records
+missing records
+extra records
+schema mismatches
+```
+
+For large-data processing, tests should verify bounded-memory behavior where that is a system requirement.
+
+---
+
+# 32. Search Testing
+
+For OpenSearch-backed functionality, test:
+
+```text
+indexing
+updates
+deletions
+query behavior
+filters
+sorting
+pagination
+tenant isolation
+permission filtering
+empty results
+special characters
+stale projections
+```
+
+Search tests must not assume that search is the authoritative source of business data.
+
+Where eventual consistency exists, tests should explicitly account for it.
+
+---
+
+# 33. Cache Testing
+
+Test both cached and uncached behavior where caching affects correctness.
+
+Verify:
+
+```text
+cache hit
+cache miss
+expiration
+invalidation
+stale data handling
+key isolation
+tenant isolation
+failure of cache infrastructure
+```
+
+A cache failure should behave according to the application's defined resilience model.
+
+---
+
+# 34. Performance Tests
+
+Performance-sensitive code should have performance tests when ordinary functional tests cannot detect meaningful regressions.
+
+Use performance tests for:
+
+```text
+large datasets
+critical algorithms
+high-volume APIs
+database-heavy operations
+search queries
+large file processing
+serialization
+concurrent operations
+```
+
+Do not turn every unit test into a benchmark.
+
+Performance expectations should be measurable.
+
+---
+
+# 35. Large Dataset Testing
+
+For systems expected to process large data, test representative scale.
+
+Include cases such as:
+
+```text
+small
+medium
+large
+boundary-scale
+```
+
+Verify:
+
+```text
+correctness
+memory behavior
+runtime behavior
+streaming behavior
+pagination
+bounded concurrency
+```
+
+A feature that works on 1,000 records but fails on 10 million records is not sufficiently tested if production requirements include 10 million records.
+
+---
+
+# 36. End-to-End Testing
+
+E2E tests should cover critical workflows rather than every possible state.
+
+Examples include:
+
+```text
+authentication
+food ordering
+payment
+booking
+complaint submission
+administrative workflows
+tenant onboarding
+critical search flows
+```
+
+Keep E2E tests deterministic.
+
+Avoid relying on arbitrary timing or fragile selectors.
+
+Prefer stable user-facing selectors and contracts.
+
+---
+
+# 37. Test Isolation
+
+Tests must not depend on execution order.
+
+Each test should control its own:
+
+```text
+data
+state
+configuration
+time
+external dependencies
+```
+
+Do not allow one test to mutate global state that another test depends upon.
+
+Parallel test execution should be supported where practical.
+
+---
+
+# 38. Database Isolation in Tests
+
+Database tests should cleanly isolate test data.
+
+Acceptable strategies may include:
+
+```text
+transactions
+rollback
+per-test databases
+isolated schemas
+unique test namespaces
+containerized databases
+```
+
+Choose the strategy appropriate to the test environment.
+
+Do not make tests depend on leftover database state.
+
+---
+
+# 39. Test Cleanup
+
+Tests must clean up resources they create.
+
+This includes:
+
+```text
+database records
+temporary files
+network servers
+timers
+event listeners
+subscriptions
+background workers
+cache entries
+mock state
+```
+
+Resource leaks can create flaky tests and misleading failures.
+
+---
+
+# 40. Flaky Tests
+
+Flaky tests are defects.
+
+Do not simply:
+
+```text
+retry until green
+increase arbitrary timeouts
+skip the test
+disable assertions
+```
+
+to hide flakiness.
+
+When a test flakes:
+
+1. Identify the source.
+2. Determine whether it is timing, concurrency, shared state, randomness, infrastructure, or test design.
+3. Make the behavior deterministic where possible.
+4. Fix the underlying problem.
+
+Quarantine should be temporary and documented if the project supports it.
+
+---
+
+# 41. Assertions
+
+Assertions should be specific enough to detect meaningful regressions.
+
+Avoid assertions that prove almost nothing:
+
+```ts
+expect(result).toBeDefined();
+```
+
+when the actual contract is more specific.
+
+Prefer:
+
+```ts
+expect(result.status).toBe("confirmed");
+expect(result.total).toBe(expectedTotal);
+```
+
+Do not over-assert irrelevant implementation details.
+
+The goal is a meaningful failure message.
+
+---
+
+# 42. Snapshot Tests
+
+Use snapshots selectively.
+
+Snapshots are appropriate when:
+
+```text
+the output is structured
+the output is intentionally reviewed as a whole
+changes should be visible
+```
+
+Avoid giant snapshots that are routinely updated without understanding the change.
+
+Do not use snapshots as a substitute for meaningful behavioral assertions.
+
+---
+
+# 43. Test Naming
+
+Test names should describe behavior.
+
+Prefer:
+
+```text
+creates an order when inventory is available
+rejects an order when the user lacks permission
+returns only resources belonging to the tenant
+rolls back booking when payment fails
+```
+
+over:
+
+```text
+testOrder()
+works()
+shouldPass()
+```
+
+A failing test name should help explain what broke.
+
+---
+
+# 44. Test Organization
+
+Tests should live according to the project's established test architecture.
+
+Keep related tests close to the behavior they verify when that improves discoverability.
+
+Avoid scattering tests across arbitrary directories.
+
+A new engineer should be able to determine:
+
+```text
+where unit tests live
+where integration tests live
+where E2E tests live
+how test fixtures work
+how test infrastructure works
+how to run each category
+```
+
+from repository documentation.
+
+---
+
+# 45. Test Utilities
+
+Shared test utilities should have clear ownership.
+
+Avoid creating:
+
+```text
+testUtils.ts
+helpers.ts
+common.ts
+```
+
+as giant dumping grounds.
+
+Prefer focused utilities such as:
+
+```text
+test-auth/
+test-database/
+test-fixtures/
+test-http/
+test-events/
+```
+
+when the repository architecture benefits from them.
+
+Do not share a helper merely because two tests have similar setup.
+
+---
+
+# 46. Regression Tests
+
+When fixing a bug, add a regression test when practical.
+
+The test should reproduce the failure before the fix and pass afterward.
+
+Especially prioritize regression tests for:
+
+```text
+security bugs
+data corruption
+authorization failures
+tenant isolation
+payment issues
+concurrency bugs
+production incidents
+critical business logic
+```
+
+Do not fix a bug by changing only the test expectation.
+
+---
+
+# 47. Refactoring and Tests
+
+Tests should provide confidence during refactoring.
+
+If a refactor requires rewriting large numbers of behaviorally equivalent tests, investigate whether the tests are coupled to implementation details.
+
+Good tests allow internal implementation to change while preserving behavioral expectations.
+
+Do not preserve poor architecture solely because existing tests are tightly coupled to it.
+
+---
+
+# 48. Test Coverage
+
+Coverage is a signal, not the objective.
+
+Do not optimize solely for:
+
+```text
+line coverage
+branch coverage
+function coverage
+```
+
+High coverage with weak assertions does not provide meaningful confidence.
+
+Prioritize coverage of:
+
+```text
+business-critical behavior
+security boundaries
+failure paths
+data integrity
+public contracts
+high-risk integrations
+```
+
+---
+
+# 49. Required Verification
+
+Before considering a change complete, run the appropriate verification.
+
+Depending on the change, this may include:
+
+```text
+unit tests
+integration tests
+API tests
+component tests
+E2E tests
+type checking
+linting
+formatting
+build
+security checks
+performance tests
+```
+
+Do not claim tests passed unless they were actually executed successfully.
+
+If a required test cannot be run, state:
+
+```text
+what was not run
+why it was not run
+what was run instead
+```
+
+Never imply verification that did not occur.
+
+---
+
+# 50. Change-to-Test Mapping
+
+Every meaningful code change should answer:
+
+```text
+What behavior changed?
+What test proves the new behavior?
+What existing behavior could regress?
+What test protects against that regression?
+```
+
+Examples:
+
+| Change | Expected Testing |
+|---|---|
+| Pure business rule | Unit test |
+| Database query | Integration test |
+| API endpoint | API/integration test |
+| Authentication | Integration + negative security tests |
+| Authorization | Positive + negative tests |
+| Tenant isolation | Cross-tenant tests |
+| UI behavior | Component test |
+| Critical user journey | E2E test |
+| External provider | Adapter/contract test |
+| Concurrency | Concurrency test |
+| Performance-critical algorithm | Benchmark/performance test |
+| Bug fix | Regression test |
+
+Use the smallest test level that provides sufficient confidence, and add higher-level coverage when the risk warrants it.
+
+---
+
+# 51. Test Review Checklist
+
+Before finalizing a change, verify:
+
+- [ ] Important behavior has appropriate tests.
+- [ ] Happy paths are covered.
+- [ ] Important failure paths are covered.
+- [ ] Authorization boundaries are tested.
+- [ ] Tenant isolation is tested where applicable.
+- [ ] Edge cases are covered.
+- [ ] Tests are deterministic.
+- [ ] Tests do not depend on execution order.
+- [ ] External services are appropriately isolated.
+- [ ] Database state is isolated.
+- [ ] Test data is synthetic and appropriate.
+- [ ] Assertions verify meaningful behavior.
+- [ ] Tests are not coupled unnecessarily to implementation details.
+- [ ] New bugs have regression coverage where practical.
+- [ ] Performance-sensitive changes have appropriate measurement.
+- [ ] Relevant verification commands were actually run.
+- [ ] No flaky behavior was hidden rather than fixed.
+
+---
+
+# 52. Final Principle
+
+Tests are executable documentation of important system behavior.
+
+A strong KAMPYN test suite should make it difficult to accidentally:
+
+```text
+break a contract
+bypass authorization
+cross a tenant boundary
+corrupt persistent state
+break a critical workflow
+introduce a concurrency bug
+silently change business behavior
+```
+
+without detection.
+
+> **Test behavior, not implementation.**  
+> **Prefer deterministic tests.**  
+> **Test failure paths, not only success paths.**  
+> **Use the lowest test level that provides sufficient confidence.**  
+> **Mock boundaries, not internals.**  
+> **Treat flaky tests as defects.**  
+> **Use coverage as a signal, not a target.**  
+> **Never claim verification that was not performed.**
+--- 

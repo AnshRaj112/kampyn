@@ -1,6 +1,1393 @@
 ---
-description: API and contract guidance
-alwaysApply: false
+description: KAMPYN API engineering rules covering API contracts, request validation, authentication, authorization, responses, errors, pagination, idempotency, versioning, compatibility, observability, and API evolution.
+alwaysApply: true
 ---
 
-Apply the repository's API validation, authorization, compatibility, error-model, and contract rules in `AGENTS.md` and the applicable `.ai/` policies.
+# KAMPYN — API Rules
+
+## 1. Purpose
+
+These rules define how KAMPYN APIs should be designed, implemented, tested, documented, and evolved.
+
+The API is a contract between KAMPYN and its consumers.
+
+Consumers may include:
+
+```text
+KAMPYN web applications
+mobile applications
+administrative applications
+SDKs
+university integrations
+self-hosted deployments
+internal services
+external services
+```
+
+API design must therefore prioritize:
+
+```text
+clarity
+consistency
+correctness
+security
+predictability
+backward compatibility
+observability
+```
+
+General architecture rules are defined in `01-architecture.mdc`.
+
+Code quality rules are defined in `02-code-quality.mdc`.
+
+Performance of the code is defined in `03-performance.mdc`.
+
+Security rules are defined in `04-security.mdc`.
+
+Testing rules are defined in `05-testing.mdc`.
+
+Documentation rules are defined in `06-documentation.mdc`.
+
+---
+
+# 2. API Principles
+
+Prefer:
+
+```text
+explicit contracts
+strong validation
+consistent responses
+predictable errors
+stable semantics
+clear resource ownership
+safe defaults
+backward compatibility
+```
+
+Avoid:
+
+```text
+implicit behavior
+inconsistent endpoints
+leaking internal models
+overloaded endpoints
+ambiguous parameters
+breaking changes without migration
+client-controlled authorization
+```
+
+An API should be understandable without reading its implementation.
+
+---
+
+# 3. API Boundary
+
+Treat every API request as an untrusted external boundary.
+
+Validate:
+
+```text
+path parameters
+query parameters
+headers where relevant
+request body
+content type
+authentication context
+tenant context
+pagination values
+filter values
+sorting values
+```
+
+Do not allow unvalidated external input to reach business logic or persistence layers.
+
+---
+
+# 4. API Contract
+
+Every public API should have an explicit contract.
+
+The contract should define, where applicable:
+
+```text
+HTTP method
+path
+authentication
+authorization
+request parameters
+request body
+response body
+status codes
+validation behavior
+error behavior
+pagination
+filtering
+sorting
+idempotency
+rate limits
+versioning
+```
+
+The implementation must conform to the contract.
+
+Do not allow undocumented behavior to become an accidental public API.
+
+---
+
+# 5. Resource-Oriented Design
+
+Model APIs around meaningful domain resources and operations.
+
+Prefer:
+
+```text
+GET    /orders/:orderId
+POST   /orders
+PATCH  /orders/:orderId
+DELETE /orders/:orderId
+```
+
+over vague action-oriented endpoints such as:
+
+```text
+POST /doOrder
+POST /processSomething
+POST /handleOrder
+```
+
+Action endpoints are acceptable when the operation genuinely represents a command that cannot be expressed clearly as ordinary resource manipulation.
+
+Examples:
+
+```text
+POST /orders/:orderId/cancel
+POST /bookings/:bookingId/confirm
+POST /payments/:paymentId/refund
+```
+
+Use domain language consistently.
+
+---
+
+# 6. HTTP Methods
+
+Use HTTP methods according to their semantics.
+
+Generally:
+
+```text
+GET
+read
+
+POST
+create or execute a non-idempotent command
+
+PUT
+replace a resource when replacement semantics are appropriate
+
+PATCH
+partially modify a resource
+
+DELETE
+remove or deactivate a resource according to the contract
+```
+
+Do not use `GET` for operations that mutate state.
+
+Avoid hiding destructive or state-changing operations behind query parameters.
+
+---
+
+# 7. HTTP Semantics
+
+Use HTTP status codes consistently.
+
+Examples include:
+
+```text
+200 OK
+201 Created
+202 Accepted
+204 No Content
+400 Bad Request
+401 Unauthorized
+403 Forbidden
+404 Not Found
+409 Conflict
+422 Unprocessable Content
+429 Too Many Requests
+500 Internal Server Error
+502 Bad Gateway
+503 Service Unavailable
+```
+
+Use the status that accurately represents the API contract.
+
+Do not return `200` for every outcome merely because the request reached the server.
+
+Do not expose internal implementation errors as HTTP semantics.
+
+---
+
+# 8. Authentication
+
+Protected APIs must use the established authentication mechanism.
+
+Authentication should establish:
+
+```text
+who is making the request
+```
+
+It must not establish:
+
+```text
+what the caller is allowed to do
+```
+
+Authorization remains a separate concern.
+
+Do not implement authentication independently inside individual endpoints.
+
+Use the centralized authentication boundary.
+
+---
+
+# 9. Authorization
+
+Every protected operation must enforce authorization.
+
+Authorization should consider the appropriate combination of:
+
+```text
+authenticated principal
+tenant membership
+resource ownership
+role
+permission
+resource state
+operation
+```
+
+Never rely on the frontend to enforce API authorization.
+
+Never assume that possession of a resource identifier grants access.
+
+---
+
+# 10. Tenant Context
+
+For tenant-aware APIs, tenant context must be derived from trusted authentication and authorization mechanisms.
+
+Do not blindly trust:
+
+```text
+tenantId
+universityId
+organizationId
+campusId
+```
+
+from the request body or query string.
+
+If a tenant identifier is accepted from the client for a legitimate reason, verify that it matches an authorized tenant context.
+
+Every tenant-scoped query must preserve tenant isolation.
+
+---
+
+# 11. Request Validation
+
+Use the project's established schema validation system.
+
+KAMPYN should prefer strongly typed schemas, including Zod where appropriate.
+
+Validation should happen at the API boundary.
+
+Example flow:
+
+```text
+HTTP Request
+     ↓
+Parse
+     ↓
+Validate
+     ↓
+Authenticate
+     ↓
+Authorize
+     ↓
+Application Logic
+     ↓
+Persistence / External Services
+```
+
+Do not pass raw request objects deep into the application.
+
+---
+
+# 12. Validation vs Business Rules
+
+Keep structural validation separate from business logic.
+
+Validation answers:
+
+```text
+Is this request structurally valid?
+```
+
+Business logic answers:
+
+```text
+Is this operation allowed under the current domain state?
+```
+
+For example:
+
+```text
+quantity must be an integer > 0
+```
+
+is validation.
+
+```text
+quantity cannot exceed available inventory
+```
+
+is a business rule.
+
+Do not put all business logic into request schemas.
+
+---
+
+# 13. Unknown Fields
+
+Define how unknown request fields are handled.
+
+For security-sensitive contracts, prefer rejecting or explicitly controlling unexpected fields rather than silently accepting arbitrary input.
+
+Do not blindly pass request objects to:
+
+```text
+database updates
+database filters
+domain constructors
+external APIs
+```
+
+Only accepted fields should influence the operation.
+
+---
+
+# 14. Request Size
+
+API endpoints must have appropriate resource limits.
+
+Consider limits for:
+
+```text
+request body
+query length
+header size
+file upload size
+batch size
+pagination size
+array length
+string length
+nested object depth
+```
+
+Do not allow clients to create unbounded server work through request payloads.
+
+---
+
+# 15. Query Parameters
+
+Query parameters should have explicit semantics.
+
+For example:
+
+```text
+?page=2
+?limit=20
+?sort=createdAt
+?order=desc
+?status=confirmed
+```
+
+Define:
+
+```text
+allowed values
+defaults
+maximum values
+behavior for invalid values
+```
+
+Do not silently accept arbitrary query parameters.
+
+---
+
+# 16. Pagination
+
+Collection endpoints should not return unbounded datasets.
+
+Pagination should be explicit.
+
+Prefer cursor/keyset pagination for large or frequently changing datasets where appropriate.
+
+Offset pagination may be appropriate for smaller or stable datasets.
+
+Define:
+
+```text
+page size
+maximum page size
+cursor format
+ordering
+next-page behavior
+```
+
+Never allow clients to request arbitrarily large result sets.
+
+---
+
+# 17. Cursor Pagination
+
+Cursor-based pagination must use a stable ordering.
+
+A cursor should contain only the information required to continue pagination.
+
+Do not expose internal implementation details unnecessarily.
+
+Cursor behavior must remain consistent with the documented ordering.
+
+Test:
+
+```text
+first page
+next page
+empty page
+last page
+duplicate prevention
+records inserted between requests
+records deleted between requests
+```
+
+where relevant.
+
+---
+
+# 18. Filtering
+
+Filters should be explicit and constrained.
+
+Prefer:
+
+```text
+?status=confirmed
+?category=food
+?createdAfter=...
+```
+
+over arbitrary query expressions such as:
+
+```text
+?filter={"anything": "..."}
+```
+
+unless the API deliberately defines a structured filtering language.
+
+Do not expose raw database query syntax through public APIs.
+
+---
+
+# 19. Sorting
+
+Sorting parameters must use an allowlist.
+
+Prefer:
+
+```text
+?sort=createdAt
+?sort=-createdAt
+```
+
+with known supported fields.
+
+Do not allow clients to supply arbitrary database fields or expressions.
+
+Sorting should have deterministic behavior.
+
+Where pagination depends on ordering, include a stable tie-breaker.
+
+---
+
+# 20. Field Selection
+
+If APIs support field selection, define an explicit allowlist.
+
+Do not expose arbitrary database fields through mechanisms such as:
+
+```text
+?fields=*
+```
+
+without a carefully controlled contract.
+
+Sensitive fields must never become available merely because a client can request them.
+
+---
+
+# 21. Response Contracts
+
+API responses should be stable and predictable.
+
+Avoid returning different shapes for the same endpoint without an explicit contract.
+
+For example, do not sometimes return:
+
+```json
+{
+  "data": {}
+}
+```
+
+and other times:
+
+```json
+{}
+```
+
+without a documented reason.
+
+Consistency makes SDKs, clients, and integrations safer.
+
+---
+
+# 22. Collection Responses
+
+Use a consistent collection structure.
+
+A common pattern is:
+
+```json
+{
+  "data": [],
+  "pagination": {
+    "nextCursor": null
+  }
+}
+```
+
+The exact shape should follow the project's API contract.
+
+Do not introduce multiple pagination response formats without a strong reason.
+
+---
+
+# 23. Single Resource Responses
+
+Single-resource endpoints should return a predictable resource representation.
+
+Avoid exposing internal persistence models directly.
+
+The response should contain only fields that belong to the public contract.
+
+Do not accidentally expose:
+
+```text
+password hashes
+internal tokens
+private keys
+internal database identifiers
+authorization metadata
+internal debugging fields
+```
+
+---
+
+# 24. DTOs and Internal Models
+
+Do not automatically return database models directly from API handlers.
+
+Prefer an explicit boundary where necessary:
+
+```text
+Request DTO
+    ↓
+Application / Domain
+    ↓
+Persistence Model
+    ↓
+Domain / Application Result
+    ↓
+Response DTO
+```
+
+Do not create unnecessary mapping layers when the structures genuinely represent the same contract.
+
+The purpose is controlled API boundaries, not abstraction for its own sake.
+
+---
+
+# 25. Error Model
+
+Errors should have a consistent API representation.
+
+A useful error contract may contain:
+
+```json
+{
+  "error": {
+    "code": "ORDER_NOT_FOUND",
+    "message": "Order was not found"
+  }
+}
+```
+
+The exact schema should follow the project's established contract.
+
+Errors should be:
+
+```text
+machine-readable
+human-readable
+safe
+consistent
+```
+
+Do not expose stack traces or internal exceptions.
+
+---
+
+# 26. Error Codes
+
+Use stable machine-readable error codes for important API failures.
+
+Prefer:
+
+```text
+ORDER_NOT_FOUND
+ORDER_ALREADY_CANCELLED
+INSUFFICIENT_INVENTORY
+BOOKING_CONFLICT
+INVALID_PAYMENT_STATE
+```
+
+over requiring clients to parse human-readable messages.
+
+Error codes should represent meaningful contract conditions.
+
+Do not create unique error codes for every trivial branch.
+
+---
+
+# 27. Validation Errors
+
+Validation errors should identify the invalid input when safe and useful.
+
+For example:
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "fields": {
+      "quantity": "Must be greater than zero"
+    }
+  }
+}
+```
+
+Do not expose internal schema implementation details.
+
+Do not reveal sensitive validation information that could assist abuse.
+
+---
+
+# 28. Error Consistency
+
+Do not allow every endpoint to invent its own error structure.
+
+Centralize API error handling where appropriate.
+
+Internal errors should be translated into safe public errors at the API boundary.
+
+Application code should not need to understand HTTP formatting unless it is explicitly part of that layer's responsibility.
+
+---
+
+# 29. Idempotency
+
+Operations that may be retried must define whether they are idempotent.
+
+This is particularly important for:
+
+```text
+payments
+orders
+bookings
+webhooks
+resource creation
+external service calls
+background jobs
+```
+
+Where idempotency keys are supported:
+
+```text
+client request
+      ↓
+idempotency key
+      ↓
+deduplication
+      ↓
+single logical operation
+```
+
+The idempotency contract should define:
+
+```text
+key format
+scope
+lifetime
+request matching
+response reuse
+failure behavior
+```
+
+---
+
+# 30. Retry Safety
+
+Do not automatically retry every API request.
+
+Retries are appropriate only when the operation and failure mode support them.
+
+Consider:
+
+```text
+idempotency
+timeout
+connection failure
+server availability
+rate limiting
+dependency behavior
+```
+
+Never retry non-idempotent operations blindly.
+
+---
+
+# 31. Timeouts
+
+Every outbound dependency call should have an appropriate timeout.
+
+Do not allow API requests to wait indefinitely for:
+
+```text
+database operations
+HTTP services
+payment providers
+search services
+queues
+storage
+```
+
+Timeout values should reflect the operation's expected behavior.
+
+Do not use excessively large timeouts merely to hide slow dependencies.
+
+---
+
+# 32. External API Integration
+
+External API calls should occur through dedicated integration boundaries.
+
+Do not spread provider-specific code throughout application logic.
+
+Prefer:
+
+```text
+Application
+    ↓
+Provider Interface
+    ↓
+Provider Adapter
+    ↓
+External API
+```
+
+The adapter should handle:
+
+```text
+authentication
+request mapping
+response mapping
+timeouts
+provider errors
+retries
+provider-specific behavior
+```
+
+---
+
+# 33. Transactions and APIs
+
+Do not keep database transactions open while performing slow external network calls unless the architecture explicitly requires it.
+
+Avoid:
+
+```text
+BEGIN TRANSACTION
+    ↓
+database operation
+    ↓
+external HTTP request
+    ↓
+wait
+    ↓
+COMMIT
+```
+
+where a safer workflow can be designed.
+
+Consider:
+
+```text
+transactional state
+        ↓
+event / job
+        ↓
+external operation
+        ↓
+state update
+```
+
+when appropriate.
+
+---
+
+# 34. API and Database Boundaries
+
+API handlers should not become database access layers.
+
+Avoid:
+
+```text
+HTTP handler
+    ↓
+raw database queries
+    ↓
+response
+```
+
+for non-trivial business behavior.
+
+Prefer:
+
+```text
+HTTP handler
+    ↓
+application service
+    ↓
+domain logic
+    ↓
+repository
+    ↓
+database
+```
+
+according to the architecture defined in `01-architecture.mdc`.
+
+---
+
+# 35. API and OpenSearch
+
+OpenSearch should not become the authoritative source for business state unless explicitly defined by architecture.
+
+For search-driven endpoints:
+
+```text
+API
+ ↓
+Search service
+ ↓
+OpenSearch
+```
+
+is appropriate for discovery/search behavior.
+
+But operations requiring authoritative state should use the primary source of truth.
+
+Do not perform sensitive mutations based solely on stale search results.
+
+---
+
+# 36. API and Cache
+
+Caching must not bypass authorization.
+
+The effective lookup must remain equivalent to:
+
+```text
+authenticate
+    ↓
+authorize
+    ↓
+retrieve/cache
+```
+
+or use a cache key that safely incorporates the authorization context where appropriate.
+
+Never return one user's private response because another user's request hit the same cache key.
+
+---
+
+# 37. API Versioning
+
+Public APIs should have a deliberate versioning strategy.
+
+Versioning may use:
+
+```text
+URL
+header
+media type
+```
+
+depending on the project's architecture.
+
+Do not introduce versioning mechanisms inconsistently across endpoints.
+
+Breaking changes require explicit migration planning.
+
+---
+
+# 38. Backward Compatibility
+
+Prefer additive changes.
+
+Generally safe changes include:
+
+```text
+adding optional response fields
+adding new endpoints
+adding optional request fields
+adding new resources
+```
+
+Potentially breaking changes include:
+
+```text
+removing fields
+renaming fields
+changing field meaning
+changing data types
+changing status codes
+changing error semantics
+changing authentication requirements
+changing pagination semantics
+```
+
+Treat these as contract changes.
+
+---
+
+# 39. API Deprecation
+
+When deprecating an API:
+
+1. Document the deprecated behavior.
+2. Identify the replacement.
+3. Provide a migration path.
+4. Define the compatibility period where applicable.
+5. Communicate the change to consumers.
+6. Remove the old behavior only according to the project's versioning policy.
+
+Do not silently break external consumers.
+
+---
+
+# 40. API Documentation
+
+Every public API should be documented according to `06-documentation.mdc`.
+
+Documentation should include where applicable:
+
+```text
+endpoint
+method
+authentication
+authorization
+request schema
+response schema
+status codes
+errors
+pagination
+examples
+rate limits
+idempotency
+version
+deprecation status
+```
+
+Prefer generated or schema-driven documentation where the project supports it.
+
+---
+
+# 41. OpenAPI
+
+If KAMPYN uses OpenAPI, treat the specification as a first-class contract.
+
+Keep:
+
+```text
+routes
+schemas
+responses
+security definitions
+parameters
+```
+
+consistent with the actual implementation.
+
+Avoid manually maintaining an OpenAPI document that has already diverged from the API.
+
+Where practical, generate or validate the specification from the actual API definitions.
+
+---
+
+# 42. SDK Compatibility
+
+If an API is consumed through a KAMPYN SDK, API changes must consider SDK compatibility.
+
+When changing a public contract:
+
+```text
+API
+ ↓
+SDK
+ ↓
+consumer applications
+```
+
+evaluate:
+
+```text
+types
+serialization
+errors
+pagination
+authentication
+version compatibility
+```
+
+Do not update the API while ignoring downstream SDK contracts.
+
+---
+
+# 43. Webhooks
+
+Webhook APIs should define:
+
+```text
+event type
+payload schema
+signature verification
+delivery behavior
+retry behavior
+ordering guarantees
+idempotency
+versioning
+```
+
+Webhook consumers should be prepared for duplicate delivery.
+
+Webhook endpoints should acknowledge requests according to the provider's delivery contract rather than performing unnecessary long-running work synchronously.
+
+---
+
+# 44. Asynchronous APIs
+
+For operations that cannot reasonably complete during the request:
+
+```text
+POST /large-operation
+        ↓
+202 Accepted
+        ↓
+job/resource identifier
+        ↓
+status endpoint or event
+```
+
+may be appropriate.
+
+Do not hold HTTP connections open indefinitely for long-running operations.
+
+Define:
+
+```text
+job state
+failure state
+retry behavior
+cancellation behavior
+completion behavior
+```
+
+where applicable.
+
+---
+
+# 45. Health and Readiness Endpoints
+
+Operational endpoints should have clear purposes.
+
+Distinguish between:
+
+```text
+liveness
+readiness
+dependency health
+```
+
+Do not expose sensitive internal diagnostic information through public health endpoints.
+
+A readiness check should reflect whether the service can perform its required responsibilities, not merely whether the process is running.
+
+---
+
+# 46. Rate Limiting
+
+API rate limits should protect both the system and legitimate consumers.
+
+Consider:
+
+```text
+identity
+tenant
+IP
+endpoint
+resource
+operation cost
+```
+
+Document relevant limits for public APIs.
+
+Do not make limits so opaque that legitimate consumers cannot understand failures.
+
+Return an appropriate response when rate limits are exceeded.
+
+---
+
+# 47. Observability
+
+APIs should produce sufficient telemetry to diagnose behavior without leaking sensitive data.
+
+Where appropriate, record:
+
+```text
+request identifier
+correlation identifier
+route
+method
+status
+latency
+tenant context where safe
+authenticated principal identifier where safe
+error code
+```
+
+Do not log:
+
+```text
+passwords
+tokens
+secrets
+sensitive request bodies
+payment credentials
+```
+
+unless explicitly approved and protected.
+
+---
+
+# 48. Correlation IDs
+
+Distributed requests should have a traceable correlation mechanism where the architecture requires it.
+
+A correlation identifier should allow engineers to connect:
+
+```text
+API request
+application operation
+database activity where observable
+background job
+external call
+event
+```
+
+Do not expose internal tracing information unnecessarily to public consumers.
+
+---
+
+# 49. API Performance
+
+API performance should follow `03-performance.mdc`.
+
+Pay attention to:
+
+```text
+database queries
+N+1 behavior
+serialization
+payload size
+external calls
+search queries
+cache usage
+pagination
+concurrency
+```
+
+Do not solve performance problems by weakening API correctness or authorization.
+
+---
+
+# 50. Batch APIs
+
+Batch operations should have explicit limits and semantics.
+
+Define:
+
+```text
+maximum batch size
+partial failure behavior
+transaction behavior
+idempotency
+ordering
+response structure
+```
+
+Do not create batch endpoints merely to hide inefficient client behavior.
+
+Batching should reduce meaningful overhead.
+
+---
+
+# 51. Bulk Operations
+
+Bulk mutations require particular care.
+
+Before implementing one, determine:
+
+```text
+authorization per resource
+tenant isolation
+transaction boundary
+partial failure behavior
+rate limits
+resource consumption
+audit requirements
+idempotency
+```
+
+Do not assume that authorization for one resource automatically authorizes the entire batch.
+
+---
+
+# 52. API Security Review
+
+Before finalizing a public or protected API, verify:
+
+- [ ] Authentication is correctly enforced.
+- [ ] Authorization is enforced server-side.
+- [ ] Resource-level access is checked.
+- [ ] Tenant isolation is preserved.
+- [ ] Input is validated.
+- [ ] Unknown or unsafe fields cannot influence persistence.
+- [ ] Database queries are parameterized or safely constructed.
+- [ ] Response data does not expose sensitive fields.
+- [ ] Error responses do not leak internals.
+- [ ] Rate/resource limits are appropriate.
+- [ ] Idempotency is defined where required.
+- [ ] External calls have timeouts.
+- [ ] Retry behavior is safe.
+- [ ] Cache behavior preserves authorization.
+- [ ] Search behavior preserves authorization.
+- [ ] Security-sensitive actions are auditable where required.
+
+---
+
+# 53. API Testing Requirements
+
+Every meaningful API change should include appropriate tests.
+
+At minimum, consider:
+
+```text
+happy path
+validation failure
+authentication failure
+authorization failure
+not found
+conflict
+tenant isolation
+pagination
+idempotency
+external dependency failure
+```
+
+For critical APIs, include integration and end-to-end coverage where appropriate.
+
+Follow `05-testing.mdc`.
+
+---
+
+# 54. API Change Checklist
+
+Before considering an API change complete:
+
+- [ ] Contract is explicitly defined.
+- [ ] Existing API patterns were inspected.
+- [ ] Request validation exists.
+- [ ] Authentication is correct.
+- [ ] Authorization is correct.
+- [ ] Tenant boundaries are preserved.
+- [ ] Response shape is intentional.
+- [ ] Error behavior is consistent.
+- [ ] Status codes are appropriate.
+- [ ] Pagination is bounded where applicable.
+- [ ] Filtering and sorting are constrained.
+- [ ] Idempotency is addressed where required.
+- [ ] External calls have safe timeout/retry behavior.
+- [ ] Tests cover success and important failure paths.
+- [ ] Documentation is updated.
+- [ ] SDK compatibility was considered where applicable.
+- [ ] Backward compatibility was evaluated.
+- [ ] Observability is sufficient.
+- [ ] Security implications were reviewed.
+
+---
+
+# 55. Final Principle
+
+An API is a promise.
+
+Once external consumers depend on it, seemingly small implementation details can become long-term compatibility constraints.
+
+Therefore:
+
+> **Design APIs as contracts, not convenience wrappers.**  
+> **Validate at the boundary.**  
+> **Authorize every protected operation.**  
+> **Never trust client-controlled security context.**  
+> **Keep tenant isolation explicit.**  
+> **Return stable and predictable responses.**  
+> **Make failures machine-readable and safe.**  
+> **Design retries and idempotency deliberately.**  
+> **Prefer backward-compatible evolution.**  
+> **Document what consumers actually depend on.**
+--- 

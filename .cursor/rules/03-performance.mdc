@@ -1,6 +1,1352 @@
 ---
-description: Performance and scalability guidance
-alwaysApply: false
+description: KAMPYN performance engineering rules covering algorithms, memory, databases, APIs, frontend performance, concurrency, caching, search, scalability, and measurement.
+alwaysApply: true
 ---
 
-Follow the performance, complexity, query, and resource-usage rules in `AGENTS.md` and the applicable `.ai/` policies.
+# KAMPYN — Performance Rules
+
+## 1. Purpose
+
+Performance is a system property, not merely a code-level concern.
+
+These rules define how KAMPYN should reason about:
+
+- algorithmic complexity
+- memory usage
+- database performance
+- API performance
+- network usage
+- frontend rendering
+- search
+- caching
+- concurrency
+- background processing
+- scalability
+- performance measurement
+
+The objective is not to make every operation maximally fast.
+
+The objective is to ensure that KAMPYN remains:
+
+- responsive
+- resource-efficient
+- predictable under load
+- scalable
+- operationally affordable
+- resistant to performance regressions
+
+Do not optimize blindly.
+
+Do not sacrifice correctness or maintainability for theoretical performance.
+
+---
+
+# 2. Performance Hierarchy
+
+When making performance decisions, consider the problem in this order:
+
+```text
+Correctness
+    ↓
+Algorithm / Data Structure
+    ↓
+I/O and Network
+    ↓
+Database
+    ↓
+Caching
+    ↓
+Concurrency
+    ↓
+Runtime Optimization
+    ↓
+Micro-optimization
+```
+
+A poor algorithm should not be "fixed" with caching.
+
+A poor database query should not be "fixed" with frontend optimization.
+
+A network-heavy workflow should not be optimized by shaving CPU instructions.
+
+Fix the highest-impact bottleneck first.
+
+---
+
+# 3. Measure Before Optimizing
+
+Do not assume what the bottleneck is.
+
+When practical, establish:
+
+- current behavior
+- expected workload
+- input size
+- latency
+- throughput
+- memory usage
+- CPU usage
+- database query behavior
+- network cost
+- concurrency
+- error rate
+
+Use actual measurements when the optimization is performance-sensitive.
+
+Avoid statements such as:
+
+```text id="f8k2n0"
+"This is faster."
+"This should scale."
+"This is more efficient."
+```
+
+without evidence when the claim materially affects architecture or performance.
+
+---
+
+# 4. Complexity Standards
+
+Prefer algorithms with appropriate asymptotic complexity.
+
+Typical preferred complexity:
+
+```text id="e3r6a1"
+O(1)
+O(log n)
+O(n)
+O(n log n)
+```
+
+Avoid unnecessary:
+
+```text id="v9d3m4"
+O(n²)
+O(n³)
+O(2ⁿ)
+```
+
+when a practical alternative exists.
+
+Before accepting an algorithm for large or unbounded input, determine:
+
+- time complexity
+- space complexity
+- worst-case behavior
+- expected input size
+- expected frequency
+- concurrency
+- memory pressure
+
+---
+
+# 5. O(n²) Policy
+
+O(n²) is not universally forbidden.
+
+It requires justification when the workload makes it relevant.
+
+An O(n²) solution may be acceptable when:
+
+- the input is demonstrably small
+- the input is tightly bounded
+- the operation is infrequent
+- the simpler implementation is materially easier to maintain
+- a better asymptotic solution would introduce disproportionate complexity
+
+Avoid O(n²) when the operation handles:
+
+- large datasets
+- user-generated collections
+- database result sets
+- search indexes
+- high-frequency requests
+- background workloads
+- batch processing
+- large imports/exports
+
+When replacing O(n²), consider:
+
+- hash maps
+- sets
+- indexing
+- sorting
+- binary search
+- merge algorithms
+- grouping
+- precomputation
+- database-side operations
+
+---
+
+# 6. Data Structures
+
+Choose data structures based on access patterns.
+
+Consider:
+
+```text id="0a8q7s"
+lookup
+insertion
+deletion
+ordering
+iteration
+deduplication
+memory
+concurrency
+```
+
+Examples:
+
+Use a `Set` when membership and deduplication are primary concerns.
+
+Use a `Map` when key-based lookup is required.
+
+Use arrays when ordered iteration and sequential access dominate.
+
+Use indexes when persistent lookup is frequent.
+
+Do not repeatedly scan a collection when an appropriate indexed or hashed representation is available.
+
+---
+
+# 7. Repeated Work
+
+Avoid performing the same expensive operation repeatedly.
+
+Watch for:
+
+- repeated parsing
+- repeated serialization
+- repeated computation
+- repeated database queries
+- repeated network requests
+- repeated searches
+- repeated transformations
+- repeated allocations
+
+Possible solutions include:
+
+- memoization
+- caching
+- precomputation
+- batching
+- indexing
+- materialized results
+- request coalescing
+
+Do not cache or memoize automatically.
+
+First establish that repeated work is actually expensive or frequent enough to justify the added complexity.
+
+---
+
+# 8. Memory
+
+Performance includes memory behavior.
+
+Avoid unnecessary:
+
+- large object duplication
+- full dataset materialization
+- unbounded arrays
+- unbounded maps
+- repeated serialization buffers
+- retained references
+- copies of large payloads
+
+Prefer:
+
+- streaming
+- pagination
+- chunking
+- bounded buffers
+- incremental processing
+- iterators
+- backpressure
+
+when working with large datasets.
+
+Do not load an entire large dataset into memory when the operation can safely be performed incrementally.
+
+---
+
+# 9. Large Data Processing
+
+Large datasets must be processed with explicit resource limits.
+
+Consider:
+
+```text id="e0x6e1"
+input size
+memory limit
+CPU cost
+I/O throughput
+parallelism
+chunk size
+backpressure
+failure recovery
+retry behavior
+```
+
+For large files or datasets:
+
+Prefer:
+
+```text id="1r0u8e"
+streaming
+chunking
+partitioning
+incremental processing
+bounded concurrency
+```
+
+Avoid:
+
+```text id="d4j9r2"
+load everything into memory
+```
+
+unless the dataset is demonstrably bounded and the memory requirement is acceptable.
+
+---
+
+# 10. Database Performance
+
+Database performance must be considered before adding or modifying queries.
+
+Inspect:
+
+- query shape
+- indexes
+- cardinality
+- selectivity
+- joins
+- sorting
+- filtering
+- pagination
+- aggregation
+- transaction scope
+- lock behavior
+- query frequency
+
+Avoid:
+
+- N+1 queries
+- unbounded result sets
+- unnecessary round trips
+- repeated identical queries
+- accidental full-table scans
+- unnecessary joins
+- excessive indexes
+- fetching unused columns
+
+Prefer:
+
+- appropriate indexes
+- batching
+- pagination
+- projections
+- set-based operations
+- prepared queries
+- appropriate query plans
+
+---
+
+# 11. N+1 Queries
+
+N+1 behavior is prohibited when an efficient alternative is practical.
+
+Bad pattern:
+
+```text id="3d1j7h"
+Fetch 100 orders
+    ↓
+Fetch customer for order 1
+Fetch customer for order 2
+Fetch customer for order 3
+...
+```
+
+Prefer:
+
+```text id="h6p4v1"
+Fetch orders
+    ↓
+Batch required customer data
+    ↓
+Associate results in memory
+```
+
+or an appropriate database join/query.
+
+Always inspect query behavior when loops interact with persistence.
+
+---
+
+# 12. Database Indexing
+
+Indexes should be based on actual access patterns.
+
+Before adding an index, consider:
+
+- query frequency
+- selectivity
+- cardinality
+- write frequency
+- storage cost
+- index maintenance
+- compound index ordering
+- query patterns
+
+Do not add an index merely because a field "might be searched."
+
+Do not create excessive indexes.
+
+Every important high-frequency query should have an intentional indexing strategy.
+
+---
+
+# 13. Pagination
+
+Never expose unbounded collections through public APIs or user-facing queries.
+
+For large datasets, use appropriate pagination.
+
+Consider:
+
+```text id="m4k9p7"
+offset pagination
+cursor pagination
+keyset pagination
+```
+
+based on workload and consistency requirements.
+
+For large or frequently changing datasets, prefer cursor/keyset approaches where appropriate.
+
+Pagination must define:
+
+- page size
+- maximum page size
+- ordering
+- stable cursor semantics
+- filtering behavior
+
+Never allow clients to request arbitrarily large pages.
+
+---
+
+# 14. API Performance
+
+API performance includes:
+
+```text id="j5p3w7"
+server processing
+database time
+external calls
+serialization
+network transfer
+client processing
+```
+
+Avoid:
+
+- unnecessary fields
+- unnecessary nested objects
+- repeated requests
+- sequential requests that can safely be parallelized
+- unbounded responses
+- redundant external calls
+
+Prefer:
+
+- appropriate pagination
+- field selection where justified
+- batching
+- caching
+- request coalescing
+- parallel independent operations
+
+Do not optimize response payloads prematurely when the payload is already small and insignificant.
+
+---
+
+# 15. Network Calls
+
+Network calls are expensive compared with local computation.
+
+Minimize unnecessary:
+
+- HTTP requests
+- database round trips
+- service-to-service calls
+- cloud API calls
+- search requests
+
+When multiple independent operations can safely execute concurrently, consider parallel execution.
+
+However, concurrency must respect:
+
+- provider rate limits
+- database capacity
+- memory
+- CPU
+- downstream service limits
+
+Do not blindly execute every operation concurrently.
+
+---
+
+# 16. External Services
+
+Every external dependency introduces:
+
+- latency
+- failure
+- rate limits
+- retry behavior
+- operational cost
+
+Before calling an external service:
+
+- determine whether the call is necessary
+- determine whether results can be cached
+- determine timeout behavior
+- determine retry behavior
+- determine idempotency
+- determine rate limits
+
+Do not place external calls inside database transactions unless explicitly required and safe.
+
+---
+
+# 17. Caching
+
+Caching is an optimization and consistency mechanism.
+
+Every cache must have a deliberate:
+
+```text id="q8m2d1"
+key
+TTL
+invalidation strategy
+ownership
+consistency expectation
+failure behavior
+```
+
+Do not introduce a cache without understanding invalidation.
+
+Avoid caching:
+
+- highly volatile data without a consistency strategy
+- data with low reuse
+- data cheaper to compute than to cache
+- sensitive data without appropriate isolation
+
+Prefer caching when:
+
+- reads significantly exceed writes
+- computation is expensive
+- external calls are expensive
+- data is reused frequently
+- latency requirements justify it
+
+---
+
+# 18. Cache Keys
+
+Cache keys must uniquely identify the data and relevant scope.
+
+For tenant-aware data, cache keys must preserve tenant isolation.
+
+Do not use ambiguous keys such as:
+
+```text id="q5j7v8"
+user:123
+```
+
+when the resource also depends on:
+
+```text id="0f3g5j"
+tenant
+locale
+permissions
+version
+filters
+```
+
+where those dimensions affect the result.
+
+Cache-key design must be treated as part of correctness.
+
+---
+
+# 19. Cache Invalidation
+
+Cache invalidation must be intentional.
+
+When authoritative data changes, determine whether:
+
+- the cache must be invalidated
+- the cache can tolerate stale data
+- the cache should be refreshed
+- the cache should use versioned keys
+- eventual consistency is acceptable
+
+Never assume:
+
+```text id="q6g2j4"
+"we can invalidate it later"
+```
+
+is an acceptable architecture.
+
+If stale data can cause incorrect business behavior, caching must not bypass the required consistency guarantees.
+
+---
+
+# 20. OpenSearch Performance
+
+Search workloads should be designed around the search engine rather than treating OpenSearch as a generic database.
+
+Consider:
+
+- index mappings
+- analyzers
+- field types
+- shard strategy
+- replica strategy
+- query complexity
+- result size
+- pagination
+- filtering
+- aggregations
+- indexing throughput
+
+Avoid:
+
+- unnecessarily expensive queries
+- retrieving huge result sets
+- indexing fields that are never searched
+- excessive aggregations
+- deeply paginated searches where an appropriate cursor/search-after strategy exists
+
+Search indexes should remain purpose-built for their workload.
+
+---
+
+# 21. Search Result Limits
+
+Never return unbounded search results.
+
+Define appropriate:
+
+- maximum result size
+- pagination strategy
+- sorting
+- filtering
+- timeout behavior
+
+For large search workloads, prefer efficient cursor/search-after approaches where supported and appropriate.
+
+Do not make search requests retrieve more data than the UI or consumer requires.
+
+---
+
+# 22. Frontend Performance
+
+Frontend performance should be considered across:
+
+```text id="1x5r2m"
+network
+server rendering
+client rendering
+JavaScript execution
+state updates
+DOM size
+assets
+images
+data fetching
+```
+
+Avoid:
+
+- unnecessary client-side rendering
+- unnecessary JavaScript
+- excessive state
+- redundant API requests
+- unnecessary re-renders
+- large synchronous computations
+- unnecessarily large component trees
+
+Prefer server-side capabilities when they reduce unnecessary client work.
+
+Follow the project's frontend architecture rather than introducing ad-hoc optimization patterns.
+
+---
+
+# 23. React Rendering
+
+Do not optimize every component prematurely.
+
+First identify actual rendering problems.
+
+Watch for:
+
+- unnecessary state
+- unstable references
+- expensive calculations during render
+- unnecessary context updates
+- large lists
+- repeated data transformations
+
+Use memoization only when it provides a meaningful benefit.
+
+Avoid:
+
+```text id="8k4c3x"
+useMemo everywhere
+useCallback everywhere
+React.memo everywhere
+```
+
+without evidence.
+
+Memoization has complexity and maintenance costs.
+
+---
+
+# 24. Large Frontend Lists
+
+Large lists should not render thousands of unnecessary DOM nodes.
+
+For large datasets, consider:
+
+- pagination
+- virtualization
+- incremental loading
+- server-side filtering
+- server-side sorting
+- debounced search
+
+Choose based on actual interaction requirements.
+
+Do not load an entire large dataset into the browser merely because the API makes it possible.
+
+---
+
+# 25. Client State and Server State
+
+Server state should not be duplicated unnecessarily across client state systems.
+
+Use the project's established state architecture.
+
+In particular:
+
+```text id="x2j6n8"
+Server State
+    ↓
+TanStack Query
+```
+
+and:
+
+```text id="y4f1c8"
+Client/UI State
+    ↓
+Zustand
+```
+
+Avoid copying server responses into global client state unless there is a documented reason.
+
+Duplicated state creates synchronization and invalidation costs.
+
+---
+
+# 26. Bundle and Asset Performance
+
+Avoid unnecessary frontend payload.
+
+Consider:
+
+- code splitting
+- lazy loading
+- tree shaking
+- dependency size
+- image size
+- font loading
+- third-party scripts
+
+Do not add large dependencies for small functionality.
+
+Prefer existing project capabilities when they satisfy the requirement.
+
+Do not optimize bundle size by introducing excessive abstraction or fragmented loading that harms usability.
+
+---
+
+# 27. Debouncing and Throttling
+
+Use debouncing or throttling when user interactions can trigger excessive work.
+
+Common examples:
+
+- search input
+- autocomplete
+- resize events
+- scroll handlers
+- repeated API requests
+
+Choose based on the behavior required.
+
+Do not use arbitrary delays to hide architectural or performance problems.
+
+---
+
+# 28. Concurrency
+
+Concurrency should be bounded.
+
+Before parallelizing work, consider:
+
+- CPU availability
+- memory
+- downstream capacity
+- database connection limits
+- API rate limits
+- queue capacity
+- contention
+
+Prefer bounded concurrency over unlimited parallelism.
+
+Bad:
+
+```text id="z7r5d4"
+spawn one worker per item
+```
+
+for an unbounded dataset.
+
+Prefer:
+
+```text id="4m3p8s"
+bounded worker pool
+```
+
+or an equivalent controlled mechanism.
+
+---
+
+# 29. Go Concurrency
+
+For Go services:
+
+- Every goroutine must have a clear lifecycle.
+- Every goroutine should have a termination path.
+- Respect context cancellation.
+- Avoid goroutine leaks.
+- Avoid unbounded goroutine creation.
+- Protect shared mutable state.
+- Consider channel ownership carefully.
+- Avoid concurrency when sequential execution is already sufficient.
+
+Do not introduce goroutines merely because they can improve theoretical throughput.
+
+---
+
+# 30. Background Processing
+
+Background jobs should use controlled resource consumption.
+
+Consider:
+
+```text id="7c1h2v"
+queue depth
+worker count
+batch size
+retry count
+retry delay
+timeout
+memory
+CPU
+downstream limits
+```
+
+A background worker should not consume unlimited resources simply because work is available.
+
+Use backpressure where appropriate.
+
+---
+
+# 31. Retry Behavior
+
+Retries can amplify outages.
+
+Every retry policy should consider:
+
+- maximum attempts
+- timeout
+- backoff
+- jitter
+- idempotency
+- error classification
+- downstream capacity
+
+Do not retry:
+
+- permanent validation failures
+- authorization failures
+- malformed requests
+- known non-retryable business errors
+
+without a deliberate reason.
+
+Use exponential backoff where appropriate.
+
+Avoid immediate tight retry loops.
+
+---
+
+# 32. Timeouts
+
+Every external or potentially long-running operation should have an appropriate timeout.
+
+Avoid:
+
+```text id="6z1t9x"
+infinite waits
+unbounded retries
+requests without cancellation
+```
+
+Timeouts should reflect the expected operation rather than using one arbitrary global value for everything.
+
+Timeouts should propagate through the appropriate execution context.
+
+---
+
+# 33. Resource Limits
+
+Every potentially unbounded system should have explicit limits.
+
+Consider limits for:
+
+- request body size
+- response size
+- file size
+- page size
+- queue depth
+- concurrency
+- retries
+- cache size
+- search result size
+- upload size
+- processing duration
+
+Unbounded behavior is a scalability risk.
+
+---
+
+# 34. Serialization
+
+Serialization can become expensive for large payloads.
+
+Avoid:
+
+- serializing data that is never consumed
+- repeatedly converting between formats
+- unnecessary deep cloning
+- unnecessarily verbose payloads
+- repeated JSON encoding/decoding in hot paths
+
+Prefer streaming or incremental processing for sufficiently large payloads.
+
+Do not optimize serialization before establishing that it is a meaningful bottleneck.
+
+---
+
+# 35. Memory Allocation
+
+Avoid unnecessary allocations in hot paths.
+
+Pay attention to:
+
+- large temporary collections
+- repeated object creation
+- repeated string concatenation
+- unnecessary copies
+- duplicate buffers
+- serialization intermediates
+
+For Go:
+
+- avoid premature pooling
+- use profiling before introducing `sync.Pool`
+- understand escape behavior before micro-optimizing allocations
+
+Correctness and clarity remain more important than minor allocation reductions.
+
+---
+
+# 36. Hot Paths
+
+A hot path is code executed:
+
+- frequently
+- for many users
+- for many records
+- inside large loops
+- inside high-throughput services
+
+Hot paths deserve additional scrutiny.
+
+When modifying one:
+
+1. Identify expected frequency.
+2. Identify dominant cost.
+3. Measure where practical.
+4. Avoid unnecessary allocations.
+5. Avoid repeated I/O.
+6. Review algorithmic complexity.
+7. Review concurrency.
+8. Verify the improvement.
+
+Do not micro-optimize cold paths without evidence.
+
+---
+
+# 37. Performance Regression Prevention
+
+Performance-sensitive functionality should have regression protection where practical.
+
+Potential mechanisms include:
+
+- benchmarks
+- load tests
+- query-plan checks
+- response-time thresholds
+- memory checks
+- bundle-size checks
+- search benchmarks
+
+Do not introduce arbitrary thresholds without understanding normal variance.
+
+Performance tests should be stable enough to provide useful signals.
+
+---
+
+# 38. Scalability
+
+Every major design should consider growth.
+
+At minimum, think about:
+
+```text id="n3y7q1"
+10× current workload
+100× current workload
+large tenants
+large datasets
+high concurrency
+failure conditions
+database growth
+search growth
+```
+
+This does not mean designing for infinite scale.
+
+It means avoiding architectural decisions that obviously fail at foreseeable scale.
+
+---
+
+# 39. Horizontal Scaling
+
+Services intended to scale horizontally should avoid unnecessary local state.
+
+Be cautious with:
+
+- in-memory sessions
+- local-only caches
+- local filesystem state
+- process-local locks
+- process-local queues
+- mutable global state
+
+If multiple instances may run simultaneously, state that must be shared should use an appropriate shared system.
+
+---
+
+# 40. Vertical vs. Horizontal Scaling
+
+Do not assume horizontal scaling automatically solves performance problems.
+
+Before scaling infrastructure, determine whether the bottleneck is:
+
+- CPU
+- memory
+- database
+- network
+- storage
+- search
+- external provider
+- inefficient algorithm
+- inefficient query
+
+Scale the actual bottleneck where practical.
+
+---
+
+# 41. Database Connection Management
+
+Database connections are finite resources.
+
+Avoid:
+
+- creating unnecessary clients
+- opening connections per request
+- leaking connections
+- unbounded connection pools
+- excessive concurrent queries
+
+Use the project's established connection-management strategy.
+
+Connection pool sizing should consider:
+
+```text id="0p4y6z"
+application instances
+database capacity
+query latency
+concurrency
+workload
+```
+
+More connections do not automatically mean more performance.
+
+---
+
+# 42. Batch Operations
+
+Batch operations when repeated individual operations create unnecessary overhead.
+
+Prefer:
+
+```text id="c4v9j8"
+100 records
+    ↓
+1 appropriate batch operation
+```
+
+over:
+
+```text id="m7k2w1"
+100 records
+    ↓
+100 individual network/database calls
+```
+
+when the operation semantics permit batching.
+
+Do not create giant unbounded batches.
+
+Choose bounded batch sizes based on resource limits and workload.
+
+---
+
+# 43. Streaming
+
+Use streaming when data is:
+
+- large
+- sequential
+- incrementally processable
+- expensive to fully materialize
+
+Streaming is particularly appropriate for:
+
+- large files
+- exports
+- imports
+- logs
+- data pipelines
+- large API responses
+
+Do not use streaming merely because it sounds more scalable.
+
+Ensure:
+
+- backpressure
+- cancellation
+- error handling
+- resource cleanup
+
+are properly handled.
+
+---
+
+# 44. File and Object Storage
+
+Large files should generally avoid unnecessary local memory materialization.
+
+Prefer:
+
+```text id="j3c7m9"
+stream
+→ process
+→ upload/store
+```
+
+rather than:
+
+```text id="q8m4x2"
+download entire file
+→ load into memory
+→ process
+→ upload
+```
+
+when the workflow permits streaming.
+
+Consider:
+
+- file size
+- transfer time
+- retries
+- checksum/integrity
+- memory
+- temporary storage
+- parallelism
+
+---
+
+# 45. Performance and Correctness
+
+Performance optimization must never silently change business behavior.
+
+Do not:
+
+- drop validation
+- weaken authorization
+- reduce consistency guarantees
+- remove required transactions
+- bypass domain rules
+- return stale data where freshness is required
+- skip error handling
+
+merely to improve performance.
+
+If a performance optimization changes consistency or correctness guarantees, the trade-off must be explicit and architecturally approved.
+
+---
+
+# 46. Performance Review Checklist
+
+Before completing a performance-sensitive change:
+
+### Algorithm
+
+- [ ] Time complexity considered.
+- [ ] Space complexity considered.
+- [ ] Avoidable O(n²) behavior removed or justified.
+- [ ] Data structures match access patterns.
+
+### Database
+
+- [ ] Query behavior inspected.
+- [ ] N+1 behavior ruled out.
+- [ ] Indexing considered.
+- [ ] Result size bounded.
+- [ ] Unnecessary round trips avoided.
+
+### Network
+
+- [ ] Unnecessary calls removed.
+- [ ] Independent work is safely parallelized where useful.
+- [ ] Timeouts exist.
+- [ ] Retry behavior is intentional.
+
+### Memory
+
+- [ ] Large data is not unnecessarily materialized.
+- [ ] Unbounded collections are avoided.
+- [ ] Copies and allocations are reasonable.
+
+### Caching
+
+- [ ] Cache necessity is established.
+- [ ] Keys are correct.
+- [ ] TTL is defined.
+- [ ] Invalidation is understood.
+- [ ] Staleness is acceptable.
+
+### Concurrency
+
+- [ ] Concurrency is bounded.
+- [ ] Cancellation is handled.
+- [ ] Resource limits are respected.
+- [ ] No leaks are introduced.
+
+### Frontend
+
+- [ ] Unnecessary rendering avoided.
+- [ ] Large lists are handled appropriately.
+- [ ] Redundant network requests avoided.
+- [ ] Server/client responsibilities remain appropriate.
+
+### Verification
+
+- [ ] Relevant benchmarks or measurements were considered.
+- [ ] Performance-sensitive tests pass.
+- [ ] No correctness regression was introduced.
+
+---
+
+# 47. Final Principle
+
+KAMPYN performance should come from good engineering decisions, not layers of hacks.
+
+Prefer:
+
+```text id="4m8p2r"
+better algorithm
+      ↓
+better data structure
+      ↓
+better query
+      ↓
+less I/O
+      ↓
+appropriate caching
+      ↓
+bounded concurrency
+      ↓
+measurement
+      ↓
+optimization
+```
+
+over:
+
+```text id="1n6v9c"
+premature optimization
+      ↓
+more caching
+      ↓
+more concurrency
+      ↓
+more infrastructure
+      ↓
+more complexity
+```
+
+The goal is not to make every operation theoretically optimal.
+
+The goal is to make KAMPYN **fast enough, scalable enough, predictable under load, and simple enough to maintain**.
+
+> **Measure before optimizing.  
+> Fix algorithms before micro-optimizing.  
+> Reduce I/O before shaving CPU cycles.  
+> Bound resources before scaling them.  
+> Cache deliberately, not reflexively.  
+> Parallelize intentionally, not blindly.  
+> Never trade correctness for speed.**

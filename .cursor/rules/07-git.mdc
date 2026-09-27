@@ -1,6 +1,1074 @@
 ---
-description: Git and change-scope guidance
-alwaysApply: false
+description: KAMPYN Git rules covering branching, commits, pull requests, history, merges, rebases, conflicts, releases, repository safety, and collaborative development.
+alwaysApply: true
 ---
 
-Keep commits and diffs focused, preserve unrelated work, and follow the Git and scope rules in `AGENTS.md`.
+# KAMPYN — Git Rules
+
+## 1. Purpose
+
+These rules define how Git should be used across KAMPYN.
+
+The goal is to maintain a repository history that is:
+
+- understandable
+- reviewable
+- traceable
+- recoverable
+- safe
+- easy to maintain
+- suitable for collaborative development
+
+Git history is part of the project's engineering record.
+
+Do not treat commits as temporary containers for unrelated work.
+
+General engineering rules are defined in `AGENTS.md`.
+
+---
+
+# 2. Core Git Principles
+
+Prefer:
+
+```text
+small logical changes
+focused commits
+descriptive messages
+reviewable pull requests
+clean history
+traceable changes
+safe operations
+```
+
+Avoid:
+
+```text
+giant commits
+unrelated changes
+meaningless commit messages
+force-pushing shared history
+committing secrets
+mixing refactors with features
+```
+
+Git should preserve the reasoning and evolution of the system.
+
+---
+
+# 3. Inspect Before Git Operations
+
+Before performing significant Git operations, inspect the repository state.
+
+Use the equivalent of:
+
+```bash
+git status
+git branch
+git log
+```
+
+as appropriate.
+
+Understand:
+
+```text
+current branch
+working tree changes
+staged changes
+untracked files
+recent commits
+upstream relationship
+```
+
+Do not assume the working tree is clean.
+
+Never overwrite existing user changes without explicit authorization.
+
+---
+
+# 4. Protect Existing Work
+
+User changes are authoritative.
+
+Before modifying files:
+
+```text
+inspect current changes
+understand what is already modified
+avoid touching unrelated work
+```
+
+If the working tree contains changes unrelated to the current task:
+
+- leave them untouched
+- avoid staging them
+- do not reset them
+- do not stash them automatically
+- do not overwrite them
+
+Do not use destructive commands simply to obtain a clean working tree.
+
+---
+
+# 5. Never Destroy Uncommitted Work
+
+Do not execute destructive Git operations without explicit authorization.
+
+Examples include:
+
+```bash
+git reset --hard
+git clean -fd
+git checkout -- .
+git restore .
+git stash drop
+```
+
+or equivalent operations that can remove user work.
+
+If destructive cleanup appears necessary, explain the risk and obtain explicit authorization first.
+
+---
+
+# 6. Branching
+
+Use branches according to the repository's established branching strategy.
+
+Branch names should communicate purpose.
+
+Prefer patterns such as:
+
+```text
+feature/<short-description>
+fix/<short-description>
+refactor/<short-description>
+docs/<short-description>
+test/<short-description>
+chore/<short-description>
+security/<short-description>
+```
+
+Follow the project's existing naming convention when one already exists.
+
+Do not create unnecessary branches for trivial local work if the repository workflow does not require them.
+
+---
+
+# 7. Branch Scope
+
+A branch should represent one coherent unit of work.
+
+Avoid combining unrelated work such as:
+
+```text
+feature implementation
+dependency upgrade
+unrelated refactor
+documentation cleanup
+formatting entire repository
+```
+
+in the same branch unless the changes are genuinely related.
+
+Focused branches make review and rollback easier.
+
+---
+
+# 8. Branch Naming
+
+Branch names should be:
+
+- short
+- descriptive
+- lowercase where the repository convention permits
+- free of unnecessary punctuation
+- easy to identify in CI and pull requests
+
+Prefer:
+
+```text
+feature/order-tracking
+fix/payment-webhook-retry
+refactor/search-adapter
+security/session-validation
+```
+
+over:
+
+```text
+my-branch
+changes
+test123
+new-feature-final
+ansh-work-2
+```
+
+---
+
+# 9. Commits
+
+Each commit should represent one logical change.
+
+A good commit should ideally be:
+
+```text
+coherent
+buildable
+understandable
+reviewable
+```
+
+Avoid commits that mix unrelated modifications.
+
+For example, do not combine:
+
+```text
+implement booking API
+rename unrelated frontend components
+update deployment configuration
+```
+
+unless they are required parts of the same change.
+
+---
+
+# 10. Commit Messages
+
+Commit messages should explain the change.
+
+Prefer:
+
+```text
+feat: add booking availability endpoint
+fix: prevent duplicate payment processing
+refactor: isolate search indexing adapter
+docs: document self-hosted deployment
+test: add tenant isolation coverage
+chore: update Go dependencies
+```
+
+Avoid:
+
+```text
+update
+changes
+fix
+stuff
+final
+done
+work
+misc
+```
+
+Follow the repository's established commit convention when one exists.
+
+If Conventional Commits are used, maintain consistency with them.
+
+---
+
+# 11. Commit Message Structure
+
+When using Conventional Commits:
+
+```text
+<type>: <short description>
+```
+
+Common types include:
+
+```text
+feat
+fix
+refactor
+test
+docs
+chore
+perf
+security
+build
+ci
+```
+
+Use a scope only when the repository convention benefits from it:
+
+```text
+feat(orders): add cancellation flow
+fix(auth): reject expired refresh tokens
+```
+
+Do not force scopes everywhere if they add noise.
+
+---
+
+# 12. Commit Granularity
+
+Prefer commits that can be understood independently.
+
+Good:
+
+```text
+1. Add order cancellation domain rule
+2. Add repository support for cancellation
+3. Add API endpoint
+4. Add integration tests
+5. Document API behavior
+```
+
+when the project workflow benefits from such separation.
+
+Do not split a naturally atomic change into dozens of meaningless commits.
+
+The objective is logical history, not maximum commit count.
+
+---
+
+# 13. Formatting-Only Changes
+
+Do not mix broad formatting changes with functional work.
+
+Avoid commits containing:
+
+```text
+feature implementation
++
+entire repository formatting
++
+unrelated import reordering
+```
+
+unless formatting is required by the change.
+
+Large formatting changes make review and debugging significantly harder.
+
+---
+
+# 14. Refactoring
+
+Keep refactoring separate from behavior changes when practical.
+
+Prefer:
+
+```text
+refactor existing architecture
+        ↓
+verify behavior remains unchanged
+        ↓
+implement new behavior
+```
+
+rather than:
+
+```text
+massive refactor
++
+new feature
++
+dependency upgrade
++
+unrelated fixes
+```
+
+This makes regressions easier to identify.
+
+---
+
+# 15. Dependency Changes
+
+Dependency upgrades should be intentional.
+
+Do not bundle unrelated dependency changes into feature commits.
+
+When upgrading a dependency:
+
+1. Understand why it is changing.
+2. Review compatibility implications.
+3. Update the appropriate manifest and lockfile.
+4. Run relevant tests.
+5. Review the resulting diff.
+
+Security-driven dependency upgrades may reasonably be isolated into dedicated changes.
+
+---
+
+# 16. Lockfiles
+
+Lockfiles are part of the dependency state.
+
+When dependency manifests change:
+
+- update the appropriate lockfile
+- review unexpected dependency changes
+- do not manually edit generated lockfile sections unless required
+- commit lockfile changes when the repository tracks them
+
+Do not delete lockfiles merely to resolve dependency problems.
+
+---
+
+# 17. Generated Files
+
+Follow the repository's policy for generated files.
+
+Before committing generated output, determine whether it is:
+
+```text
+tracked source
+generated artifact
+build output
+temporary output
+```
+
+Do not commit build artifacts unless the project explicitly requires them.
+
+When generated files are intentionally tracked, regenerate them using the project's official tooling.
+
+---
+
+# 18. Secrets
+
+Never commit secrets.
+
+Check for:
+
+```text
+API keys
+passwords
+tokens
+private keys
+cloud credentials
+database credentials
+OAuth secrets
+webhook secrets
+```
+
+before committing.
+
+Sensitive files such as:
+
+```text
+.env
+.env.local
+credentials.json
+private keys
+```
+
+must follow the repository's ignore and secret-management policy.
+
+---
+
+# 19. If a Secret Is Committed
+
+Treat accidental secret commits as security incidents.
+
+Do not assume that deleting the file in a later commit removes the secret from repository history.
+
+If a secret was committed:
+
+1. Stop further propagation.
+2. Identify the exposed credential.
+3. Rotate or revoke it.
+4. Follow the project's security incident process.
+5. Determine whether history rewriting is required.
+6. Remove the secret according to the repository's approved procedure.
+
+Do not attempt history rewriting casually on shared branches.
+
+---
+
+# 20. Staging
+
+Stage intentionally.
+
+Before committing, inspect:
+
+```bash
+git diff
+git diff --staged
+```
+
+as appropriate.
+
+Ensure the staged change contains only the intended work.
+
+Do not blindly use:
+
+```bash
+git add .
+```
+
+when unrelated changes may exist.
+
+Prefer explicitly staging relevant files or reviewing the staged diff carefully.
+
+---
+
+# 21. Commit Review
+
+Before creating a commit, verify:
+
+```text
+what changed
+why it changed
+which files changed
+whether unrelated files are included
+whether secrets are present
+whether generated files are expected
+whether tests/documentation are included where required
+```
+
+The commit should tell a coherent story.
+
+---
+
+# 22. Pull Requests
+
+Pull requests should be focused and explain the change clearly.
+
+A useful PR description should communicate:
+
+```text
+what changed
+why it changed
+important implementation decisions
+testing performed
+known limitations
+migration requirements
+security considerations where relevant
+```
+
+Do not make reviewers reconstruct the purpose of a change from the diff alone.
+
+---
+
+# 23. Pull Request Size
+
+Prefer reasonably sized pull requests.
+
+If a change is large because the problem genuinely requires it, structure the implementation clearly.
+
+Avoid adding unrelated cleanup simply because a large PR already exists.
+
+Large changes should make logical boundaries visible through:
+
+- commits
+- directory structure
+- documentation
+- PR description
+
+---
+
+# 24. Reviewability
+
+Before opening or updating a PR, inspect the final diff.
+
+Look for:
+
+```text
+unrelated changes
+debugging code
+temporary code
+secrets
+unexpected generated files
+accidental deletions
+API changes
+database changes
+configuration changes
+dependency changes
+```
+
+Do not assume a successful build means the diff is correct.
+
+---
+
+# 25. Pull Request Dependencies
+
+If one PR depends on another:
+
+- make the dependency explicit
+- document the expected merge order
+- keep the dependent changes focused
+
+Avoid creating hidden dependencies between unrelated branches.
+
+---
+
+# 26. Updating a Branch
+
+When bringing a branch up to date, follow the repository's established workflow.
+
+Possible strategies include:
+
+```text
+merge
+rebase
+```
+
+Choose based on the project's collaboration and history policy.
+
+Do not rewrite shared history merely to make the graph look cleaner.
+
+---
+
+# 27. Rebase
+
+Rebase is appropriate when rewriting history is safe and useful.
+
+Before rebasing:
+
+```text
+confirm the branch is not shared in a way that makes rewriting harmful
+understand which commits will be rewritten
+ensure important work is recoverable
+```
+
+Do not casually rebase shared branches.
+
+Never rebase a protected or shared branch against repository policy.
+
+---
+
+# 28. Force Push
+
+Force-pushing can destroy shared history.
+
+Avoid:
+
+```bash
+git push --force
+```
+
+Prefer:
+
+```bash
+git push --force-with-lease
+```
+
+only when history rewriting is intentional, authorized, and safe.
+
+Never force-push protected branches unless the repository explicitly permits it and the operation is authorized.
+
+---
+
+# 29. Merge Conflicts
+
+When conflicts occur:
+
+1. Understand both sides.
+2. Identify the intended behavior.
+3. Preserve required changes from both branches.
+4. Resolve the conflict deliberately.
+5. Run relevant tests.
+6. Review the resulting diff.
+7. Complete the merge or rebase.
+
+Do not resolve conflicts by automatically choosing:
+
+```text
+ours
+theirs
+```
+
+without understanding the semantic impact.
+
+---
+
+# 30. Conflict Resolution
+
+A conflict is not merely a text problem.
+
+Determine:
+
+```text
+Which behavior should exist?
+Did either branch change an API?
+Did either branch change a database contract?
+Did either branch change security behavior?
+Did either branch change architecture?
+```
+
+When uncertain, inspect the surrounding history and source before deciding.
+
+Do not invent behavior to make a conflict disappear.
+
+---
+
+# 31. Merge Verification
+
+After resolving conflicts, verify the resulting system.
+
+At minimum, where applicable:
+
+```text
+typecheck
+lint
+tests
+build
+```
+
+Also inspect:
+
+```bash
+git diff
+git status
+```
+
+to ensure no accidental files or conflict markers remain.
+
+---
+
+# 32. Tags and Releases
+
+Tags should represent meaningful repository states.
+
+Use the project's established versioning strategy.
+
+For releases, verify:
+
+```text
+version
+changelog
+migration requirements
+build artifacts
+dependency state
+tests
+deployment compatibility
+```
+
+Do not create release tags for arbitrary intermediate states unless the project explicitly uses them.
+
+---
+
+# 33. Versioning
+
+If KAMPYN uses semantic versioning:
+
+```text
+MAJOR
+breaking changes
+
+MINOR
+backward-compatible functionality
+
+PATCH
+backward-compatible fixes
+```
+
+Follow the actual release policy of the repository rather than assuming semantic versioning is in use.
+
+Breaking API, SDK, configuration, or deployment changes must be identified clearly.
+
+---
+
+# 34. Reverts
+
+Prefer reverting a problematic change rather than manually creating a second unrelated fix when reverting is the safest way to restore a known-good state.
+
+A revert should:
+
+- identify the behavior being reversed
+- preserve history
+- be reviewable
+- be followed by appropriate tests
+
+Do not rewrite history to hide a problematic change on shared branches.
+
+---
+
+# 35. Cherry-Picking
+
+Cherry-pick only when there is a clear reason to move a specific commit between branches.
+
+Before cherry-picking:
+
+- understand the commit's dependencies
+- inspect its parent changes
+- check whether it relies on other commits
+- verify the resulting state
+
+Do not cherry-pick a commit blindly because its message sounds relevant.
+
+---
+
+# 36. Git Bisect and History Investigation
+
+Use Git history when it provides evidence useful for understanding behavior.
+
+Useful tools include:
+
+```bash
+git log
+git show
+git blame
+git diff
+git bisect
+```
+
+Use history to answer questions such as:
+
+```text
+When was this behavior introduced?
+Why was this code written?
+Which change caused this regression?
+What contract existed previously?
+```
+
+Do not use historical code as authoritative merely because it existed previously.
+
+Current architecture and requirements remain authoritative.
+
+---
+
+# 37. Blame Usage
+
+`git blame` is an investigation tool, not a tool for assigning personal responsibility.
+
+Use it to locate:
+
+```text
+relevant commit
+historical context
+ownership clues
+```
+
+Then inspect the corresponding commit and surrounding history.
+
+Do not infer intent or fault from authorship metadata alone.
+
+---
+
+# 38. Working With Uncommitted Changes
+
+If uncommitted changes exist:
+
+- inspect them
+- preserve them
+- avoid staging unrelated files
+- avoid resetting them
+- avoid overwriting them
+
+If the current task overlaps with existing modifications, determine whether they are part of the task before changing them.
+
+When ambiguity materially affects safety, ask before proceeding.
+
+---
+
+# 39. Git and Automation
+
+Automated agents must be conservative with repository operations.
+
+An AI agent must not:
+
+```text
+reset user work
+delete branches
+rewrite shared history
+force-push
+delete tags
+clean untracked files
+modify unrelated commits
+```
+
+without explicit authorization.
+
+AI-generated commits must follow the same standards as human-created commits.
+
+---
+
+# 40. Git Hooks and CI
+
+Do not bypass repository safeguards merely to complete a task.
+
+Avoid:
+
+```bash
+git commit --no-verify
+```
+
+or equivalent bypasses unless there is an explicit reason and authorization.
+
+If a hook fails:
+
+1. Understand the failure.
+2. Fix the underlying issue when appropriate.
+3. Re-run the hook.
+4. Only bypass it when the project workflow explicitly permits doing so.
+
+---
+
+# 41. Monorepo Changes
+
+KAMPYN may contain multiple applications, packages, services, SDKs, or infrastructure components.
+
+Commit boundaries should reflect logical ownership.
+
+A change spanning multiple packages is acceptable when they form one coherent feature or contract change.
+
+Do not split a single atomic API contract change into unrelated commits merely because multiple packages are affected.
+
+---
+
+# 42. Cross-Repository Changes
+
+When a change requires synchronized updates across repositories:
+
+```text
+document the dependency
+identify compatible versions
+update consumers/providers deliberately
+verify compatibility
+```
+
+Do not silently assume that another repository will be updated later.
+
+For SDK/API changes, clearly identify:
+
+```text
+producer version
+consumer version
+migration requirements
+compatibility window
+```
+
+where applicable.
+
+---
+
+# 43. Database Migrations
+
+Database migrations require special Git discipline.
+
+A migration should:
+
+- be versioned
+- be ordered
+- be reproducible
+- correspond to the intended schema change
+- avoid accidental destructive behavior
+- be reviewed with the application change
+
+Do not edit an already-applied migration casually.
+
+If a migration has already been shared or deployed, follow the project's migration correction strategy rather than rewriting history.
+
+---
+
+# 44. Configuration Changes
+
+Configuration changes should be visible in Git history.
+
+When changing:
+
+```text
+environment variables
+deployment configuration
+Docker
+Kubernetes
+CI/CD
+infrastructure
+feature flags
+```
+
+include the relevant documentation and validation where appropriate.
+
+Never commit production secrets as configuration values.
+
+---
+
+# 45. Git Hygiene
+
+Keep the repository free of unnecessary artifacts.
+
+Do not commit:
+
+```text
+build output
+temporary files
+editor files
+local databases
+logs
+debug dumps
+coverage output
+OS metadata
+personal configuration
+```
+
+unless the repository explicitly tracks them.
+
+Keep `.gitignore` aligned with the actual project tooling.
+
+---
+
+# 46. Final Diff Review
+
+Before considering Git work complete, inspect:
+
+```bash
+git status
+git diff
+git diff --staged
+```
+
+as appropriate.
+
+Check specifically for:
+
+- accidental files
+- deleted files
+- renamed files
+- secrets
+- unrelated formatting
+- debug code
+- generated artifacts
+- unexpected dependency changes
+- configuration changes
+- migration changes
+
+Do not rely solely on IDE source-control views.
+
+---
+
+# 47. Git Completion Checklist
+
+Before considering a Git operation or change complete:
+
+- [ ] Current branch was understood.
+- [ ] Existing user changes were preserved.
+- [ ] No destructive operation was performed without authorization.
+- [ ] Changes are logically scoped.
+- [ ] Commit messages clearly describe their changes.
+- [ ] No secrets are committed.
+- [ ] No unnecessary generated artifacts are committed.
+- [ ] Relevant tests and checks were run.
+- [ ] The final diff was reviewed.
+- [ ] Conflicts were resolved intentionally.
+- [ ] Shared history was not rewritten unnecessarily.
+- [ ] Force-push was avoided unless explicitly justified.
+- [ ] Documentation was updated where required.
+- [ ] Database/configuration changes were reviewed.
+- [ ] The resulting repository state is understandable and recoverable.
+
+---
+
+# 48. Final Principle
+
+Git history should help an engineer understand how KAMPYN reached its current state.
+
+Every change should be:
+
+```text
+intentional
+traceable
+reviewable
+recoverable
+```
+
+> **Protect existing work.**  
+> **Keep commits logical.**  
+> **Keep branches focused.**  
+> **Never commit secrets.**  
+> **Do not rewrite shared history casually.**  
+> **Resolve conflicts by understanding behavior, not by choosing a side blindly.**  
+> **Review the final diff before declaring work complete.**  
+> **Treat Git history as part of the engineering record.**
+--- 

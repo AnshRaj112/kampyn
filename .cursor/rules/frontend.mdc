@@ -1,6 +1,1398 @@
 ---
-description: Frontend-specific engineering guidance
-alwaysApply: false
+description: KAMPYN frontend engineering rules covering Next.js, React, TypeScript, UI architecture, state management, data fetching, accessibility, forms, performance, security, and reusable components.
+alwaysApply: true
 ---
 
-Apply the repository's frontend conventions together with `AGENTS.md` and the applicable `.ai/` policies.
+# KAMPYN Frontend Engineering Rules
+
+## 1. Purpose
+
+The frontend is a product boundary, not merely a collection of UI components.
+
+Frontend code must prioritize:
+
+- Correctness
+- Accessibility
+- Type safety
+- Maintainability
+- Reusability
+- Performance
+- Security
+- Predictable state management
+- Consistent user experience
+- Clear separation of concerns
+
+Prefer simple, explicit frontend architecture over clever abstractions.
+
+---
+
+# 2. Frontend Technology
+
+KAMPYN frontend applications use:
+
+- Next.js
+- React
+- TypeScript
+- Tailwind CSS where appropriate
+- SCSS/modules where explicitly required
+- TanStack Query for server state
+- Zustand for client/UI state
+- Zod for runtime validation
+- Appropriate Next.js server/client capabilities
+
+Do not introduce another frontend framework, state library, data-fetching library, styling system, or validation library without architectural justification.
+
+---
+
+# 3. Frontend Architecture
+
+Frontend code should follow clear boundaries:
+
+```text
+UI / Presentation
+        ↓
+Feature / Application Logic
+        ↓
+State / Data Access
+        ↓
+API / SDK Boundary
+        ↓
+Backend
+```
+
+The UI should not directly contain:
+
+- Database logic
+- Authentication implementation details
+- Complex API orchestration
+- Business rules that belong to the backend
+- Infrastructure-specific code
+
+Business-critical rules must not be duplicated solely because they exist in the UI.
+
+Frontend validation improves user experience but does not replace backend validation.
+
+---
+
+# 4. Next.js Responsibilities
+
+Use Next.js capabilities intentionally.
+
+Choose between:
+
+- Server Components
+- Client Components
+- Server-side data access
+- Client-side fetching
+- Route handlers where appropriate
+- Server actions where explicitly justified
+
+Do not mark components with `"use client"` unnecessarily.
+
+Prefer Server Components when:
+
+- No browser APIs are required.
+- No client-side interactivity is required.
+- The component can render from server-available data.
+- Reducing client JavaScript provides value.
+
+Use Client Components when:
+
+- User interaction requires browser state.
+- React client hooks are required.
+- Browser APIs are required.
+- Real-time or interactive behavior requires client execution.
+
+---
+
+# 5. Server and Client Boundaries
+
+Server/client boundaries must be explicit.
+
+Do not:
+
+- Pass non-serializable values across boundaries.
+- Expose server-only secrets to client code.
+- Import server-only modules into client components.
+- Move large server-side datasets unnecessarily into the browser.
+
+Anything imported into client code must be treated as potentially browser-exposed.
+
+Never place:
+
+- Database credentials.
+- Private API keys.
+- Internal service credentials.
+- Server-only secrets.
+
+inside client-accessible modules.
+
+---
+
+# 6. Component Architecture
+
+Components should have one clear responsibility.
+
+Prefer:
+
+```text
+Page
+ ├── Feature
+ │    ├── Section
+ │    ├── Component
+ │    └── Hook
+ └── Shared UI
+```
+
+over large components containing:
+
+- Data fetching.
+- Business logic.
+- State management.
+- Form validation.
+- Rendering.
+- Side effects.
+
+Split components when doing so improves:
+
+- Reuse.
+- Testability.
+- Readability.
+- State ownership.
+- Rendering behavior.
+
+Do not split every small JSX fragment into a separate component without a meaningful reason.
+
+---
+
+# 7. Component Naming
+
+Use descriptive names based on domain responsibility.
+
+Prefer:
+
+```text
+FoodCourtCard
+OrderSummary
+HostelBookingForm
+ComplaintStatus
+```
+
+over:
+
+```text
+Card1
+Box
+Thing
+Component
+Wrapper
+```
+
+Generic shared components should use names describing their actual UI responsibility:
+
+```text
+Modal
+Dropdown
+Pagination
+DataTable
+EmptyState
+```
+
+---
+
+# 8. Component Size
+
+Frontend source files should normally remain below the repository's 200-line threshold.
+
+If a component exceeds the threshold:
+
+1. Identify distinct responsibilities.
+2. Extract cohesive components.
+3. Extract reusable hooks where appropriate.
+4. Move domain-specific logic into feature/application modules.
+5. Avoid splitting purely to satisfy a line count.
+
+Do not create meaningless fragments solely to reduce file length.
+
+---
+
+# 9. Props
+
+Props should represent the component's actual contract.
+
+Avoid:
+
+- Excessively large prop objects.
+- Passing unrelated values.
+- Boolean-prop explosions.
+- Prop drilling across many unrelated layers.
+
+Prefer composition when multiple independent behaviors must be combined.
+
+Avoid APIs such as:
+
+```tsx
+<Component
+  isLarge
+  isCompact
+  isPrimary
+  showHeader
+  showFooter
+  enableSpecialMode
+/>
+```
+
+when separate components or composition provide a clearer design.
+
+---
+
+# 10. Reusability
+
+Reuse existing components before creating new ones.
+
+Before creating a component:
+
+1. Search the repository.
+2. Identify existing shared components.
+3. Determine whether an existing component can be extended safely.
+4. Reuse it when the semantics match.
+
+Do not force unrelated UI into one generic component merely to avoid duplication.
+
+Reuse should follow semantic similarity, not superficial visual similarity.
+
+---
+
+# 11. Design System
+
+Shared UI primitives should provide consistent:
+
+- Typography.
+- Spacing.
+- Colors.
+- Borders.
+- Radius.
+- Shadows.
+- Focus states.
+- Interactive states.
+- Loading states.
+- Error states.
+
+Do not hardcode repeated design values throughout feature code.
+
+Prefer centralized design tokens or the project's established styling system.
+
+---
+
+# 12. Styling
+
+Use the project's established styling architecture consistently.
+
+Avoid mixing multiple styling approaches without justification.
+
+Do not:
+
+- Create large inline-style objects unnecessarily.
+- Duplicate CSS across components.
+- Use arbitrary values when an existing design token applies.
+- Introduce a new styling framework for one component.
+
+Styling should remain colocated with the component or feature when appropriate.
+
+---
+
+# 13. Tailwind
+
+When Tailwind is used:
+
+- Prefer existing design tokens.
+- Keep class lists understandable.
+- Extract repeated complex patterns when appropriate.
+- Do not create massive unreadable class strings.
+- Avoid arbitrary values when a semantic token exists.
+
+Do not create an abstraction merely because two components share a few classes.
+
+---
+
+# 14. SCSS and CSS Modules
+
+When SCSS/CSS Modules are used:
+
+- Keep styles local to the component.
+- Avoid global selectors unless intentionally global.
+- Avoid deeply nested selectors.
+- Avoid excessive specificity.
+- Avoid styling based on fragile DOM structure.
+- Use semantic class names.
+
+Global styles must be intentionally limited to application-level concerns.
+
+---
+
+# 15. TypeScript
+
+TypeScript is mandatory for frontend production code.
+
+Avoid:
+
+```ts
+any
+```
+
+unless there is a documented and unavoidable reason.
+
+Prefer:
+
+- Explicit domain types.
+- Inferred types where inference is reliable.
+- Discriminated unions.
+- Literal types.
+- Generic types.
+- Type-safe API contracts.
+
+Do not use TypeScript merely to silence compiler errors.
+
+---
+
+# 16. Runtime Validation
+
+TypeScript types disappear at runtime.
+
+Use Zod or the project's approved runtime validation mechanism at untrusted boundaries.
+
+Validate:
+
+- API responses when necessary.
+- URL/query parameters.
+- Form inputs.
+- Local storage data.
+- External integration responses.
+- Configuration.
+- User-controlled structured data.
+
+Do not blindly cast:
+
+```ts
+const data = response as SomeType;
+```
+
+when the value comes from an untrusted runtime source.
+
+---
+
+# 17. API Contracts
+
+Frontend API contracts must remain explicit.
+
+Prefer:
+
+```text
+UI
+ ↓
+Feature/API layer
+ ↓
+Typed client/SDK
+ ↓
+Backend API
+```
+
+over:
+
+```text
+Component
+ ↓
+fetch(...)
+```
+
+repeated throughout the application.
+
+Centralize:
+
+- API configuration.
+- Authentication handling.
+- Request behavior.
+- Response parsing where appropriate.
+- Error normalization.
+- Common headers.
+- Correlation/request IDs where applicable.
+
+---
+
+# 18. TanStack Query
+
+TanStack Query is the preferred mechanism for server state.
+
+Use it for:
+
+- API data.
+- Remote resources.
+- Server synchronization.
+- Caching.
+- Refetching.
+- Mutations.
+- Query invalidation.
+
+Do not copy server data into Zustand merely because a component needs access to it.
+
+Prefer:
+
+```text
+API
+ ↓
+TanStack Query
+ ↓
+Components
+```
+
+rather than:
+
+```text
+API
+ ↓
+TanStack Query
+ ↓
+Zustand
+ ↓
+Components
+```
+
+unless there is a specific architectural reason.
+
+---
+
+# 19. Query Keys
+
+Query keys must be:
+
+- Stable.
+- Predictable.
+- Domain-oriented.
+- Tenant-safe.
+- Parameter-aware.
+
+Query keys must include every parameter that materially changes the result.
+
+Avoid manually constructing inconsistent query keys throughout feature code.
+
+Prefer centralized query-key factories when the feature has multiple related queries.
+
+---
+
+# 20. Query Invalidation
+
+Invalidate queries deliberately after mutations.
+
+Do not:
+
+```text
+invalidate everything
+```
+
+as the default response to every mutation.
+
+Prefer targeted invalidation.
+
+Where appropriate, use:
+
+- Direct cache updates.
+- Query invalidation.
+- Refetching.
+- Optimistic updates.
+
+Choose based on correctness and consistency requirements.
+
+---
+
+# 21. Mutations
+
+Mutations must define:
+
+- Loading state.
+- Success behavior.
+- Error behavior.
+- Retry behavior where appropriate.
+- Cache invalidation/update.
+- User feedback.
+
+Do not blindly retry non-idempotent mutations.
+
+For actions such as:
+
+- Orders.
+- Payments.
+- Reservations.
+- Bookings.
+
+frontend retry behavior must align with backend idempotency guarantees.
+
+---
+
+# 22. Zustand
+
+Use Zustand for client-owned state.
+
+Appropriate examples include:
+
+- UI preferences.
+- Sidebar state.
+- Modal state.
+- Local workflow state.
+- Temporary client state.
+- Cross-component UI state.
+
+Do not use Zustand as a replacement for TanStack Query.
+
+Avoid storing derived values that can be calculated from existing state.
+
+Prefer small, focused stores over one global store.
+
+---
+
+# 23. Zustand Store Design
+
+A Zustand store should have a clear ownership boundary.
+
+Avoid:
+
+```text
+useGlobalStore
+```
+
+containing unrelated application state.
+
+Prefer domain/UI-specific stores such as:
+
+```text
+useCartStore
+useSidebarStore
+useFilterStore
+```
+
+when those states have independent ownership and lifecycle.
+
+Do not duplicate backend state into multiple stores.
+
+---
+
+# 24. State Ownership
+
+Every state value should have one obvious owner.
+
+Classify state as:
+
+```text
+Server state
+Client state
+URL state
+Form state
+Derived state
+Local component state
+```
+
+Use the simplest appropriate mechanism.
+
+Examples:
+
+- Server data → TanStack Query
+- UI preferences → Zustand
+- Search/filter parameters → URL state where appropriate
+- Form values → form-local state/form library
+- Temporary UI state → React state
+- Derived values → computation/memoization only when justified
+
+Do not move state into global stores merely because multiple components currently need it.
+
+---
+
+# 25. URL State
+
+Use URL state for state that should be:
+
+- Shareable.
+- Bookmarkable.
+- Navigable.
+- Preserved across reloads.
+
+Examples:
+
+- Search queries.
+- Filters.
+- Sort order.
+- Pagination.
+- Selected tabs where appropriate.
+
+Do not store shareable navigation state exclusively in Zustand.
+
+---
+
+# 26. Forms
+
+Forms must provide:
+
+- Runtime validation.
+- Clear labels.
+- Accessible error messages.
+- Loading/submission states.
+- Server error handling.
+- Correct disabled states.
+- Appropriate input types.
+
+Use Zod for schema validation where appropriate.
+
+Do not rely solely on browser validation for important forms.
+
+Never trust frontend validation as a security boundary.
+
+---
+
+# 27. Loading States
+
+Every asynchronous UI operation must have an intentional loading state where appropriate.
+
+Consider:
+
+- Initial loading.
+- Background refetch.
+- Mutation loading.
+- Pagination loading.
+- Infinite scrolling.
+- Suspense/loading boundaries.
+
+Avoid replacing the entire page with a spinner when only a small component is loading.
+
+Prefer preserving useful existing content while showing localized progress where appropriate.
+
+---
+
+# 28. Error States
+
+Errors must be actionable and understandable.
+
+Handle:
+
+- Network failures.
+- Authentication failures.
+- Authorization failures.
+- Validation errors.
+- Not-found states.
+- Server errors.
+- Rate limiting.
+- Timeouts.
+
+Do not expose raw backend errors to users.
+
+Do not silently swallow errors.
+
+---
+
+# 29. Empty States
+
+Empty data is not necessarily an error.
+
+Provide intentional empty states for:
+
+- No orders.
+- No search results.
+- No bookings.
+- No complaints.
+- No notifications.
+- No available slots.
+
+Empty states should explain:
+
+- What is empty.
+- Why it may be empty where useful.
+- What the user can do next.
+
+---
+
+# 30. Optimistic Updates
+
+Use optimistic UI only when:
+
+- The operation is highly likely to succeed.
+- The rollback behavior is well defined.
+- Temporary inconsistency is acceptable.
+- The backend operation is safely retryable/idempotent where required.
+
+Do not use optimistic updates for high-risk operations without a clear consistency strategy.
+
+Examples requiring caution:
+
+- Payments.
+- Financial operations.
+- Irreversible deletion.
+- Inventory.
+- Reservations.
+
+---
+
+# 31. Authentication
+
+Authentication state must have one clear source of truth.
+
+Frontend authentication code must:
+
+- Handle expired sessions.
+- Handle unauthorized responses.
+- Avoid exposing credentials.
+- Avoid storing sensitive tokens insecurely.
+- Respect server-side authorization.
+
+Do not infer authorization solely from UI state.
+
+A hidden button is not an authorization mechanism.
+
+---
+
+# 32. Authorization
+
+The frontend may hide or disable UI based on permissions for usability.
+
+The backend must enforce authorization.
+
+Never rely on:
+
+```text
+if (user.isAdmin) {
+    allowAction();
+}
+```
+
+as the actual security boundary.
+
+The server must independently verify the user's permission for every protected operation.
+
+---
+
+# 33. Multi-Tenancy
+
+Tenant context must be explicit.
+
+Frontend state, query keys, caches, URLs, and API calls must not accidentally mix tenants.
+
+When tenant context affects data:
+
+- Include it in the appropriate API/request context.
+- Include it in relevant query keys.
+- Clear stale tenant-specific client state when switching tenants.
+- Avoid cross-tenant cache reuse.
+
+Never rely solely on UI tenant selection for authorization.
+
+---
+
+# 34. Accessibility
+
+Accessibility is mandatory.
+
+Use:
+
+- Semantic HTML.
+- Correct heading hierarchy.
+- Labels.
+- Keyboard navigation.
+- Focus management.
+- Accessible names.
+- Appropriate ARIA only when necessary.
+- Sufficient contrast.
+- Visible focus indicators.
+
+Do not use:
+
+```html
+<div onClick={...}>
+```
+
+when a semantic interactive element is appropriate.
+
+Prefer:
+
+```html
+<button>
+<a>
+<input>
+<select>
+<textarea>
+```
+
+with correct semantics.
+
+---
+
+# 35. Keyboard Navigation
+
+Interactive functionality must be usable without a mouse.
+
+Test:
+
+- Tab navigation.
+- Enter/Space activation.
+- Escape behavior.
+- Dialog focus.
+- Dropdown navigation.
+- Form interaction.
+
+Do not create custom interactive elements when native controls provide the required behavior.
+
+---
+
+# 36. Responsive Design
+
+Frontend features must work across supported viewport sizes.
+
+Do not assume:
+
+- Desktop-only dimensions.
+- Fixed widths.
+- Large screens.
+- Mouse interaction.
+
+Consider:
+
+- Mobile.
+- Tablet.
+- Desktop.
+- Touch input.
+- Variable text length.
+
+Responsive behavior should be deliberate rather than accidental.
+
+---
+
+# 37. Performance
+
+Frontend performance must follow the repository performance rules.
+
+Pay attention to:
+
+- JavaScript bundle size.
+- Server/client boundaries.
+- Rendering frequency.
+- Network requests.
+- Image sizes.
+- Fonts.
+- Large lists.
+- Hydration.
+- Data fetching.
+- Cache behavior.
+
+Do not optimize through speculative memoization.
+
+Measure before introducing complex performance techniques.
+
+---
+
+# 38. React Rendering
+
+Avoid unnecessary re-renders by designing state ownership correctly.
+
+Do not automatically add:
+
+```text
+useMemo
+useCallback
+React.memo
+```
+
+everywhere.
+
+Use memoization when:
+
+- Computation is meaningfully expensive.
+- Referential stability is required.
+- Profiling or architecture demonstrates a real benefit.
+
+First solve unnecessary renders through:
+
+- Correct state placement.
+- Component boundaries.
+- Smaller subscriptions.
+- Stable data flow.
+
+---
+
+# 39. Large Lists
+
+Large collections must use bounded rendering.
+
+For potentially large datasets, consider:
+
+- Pagination.
+- Infinite queries.
+- Virtualization.
+- Server-side filtering.
+- Server-side sorting.
+
+Do not render thousands of DOM nodes unnecessarily.
+
+Never fetch an unbounded dataset merely because the UI currently displays a small subset.
+
+---
+
+# 40. Search Interfaces
+
+Search inputs must avoid generating excessive requests.
+
+Use appropriate:
+
+- Debouncing.
+- Minimum query length.
+- Cancellation.
+- Query caching.
+- Pagination.
+- Result limits.
+
+Search should generally query the backend/search service rather than filtering a massive dataset in the browser.
+
+For KAMPYN search, OpenSearch remains a backend/search concern; frontend code should consume the search API rather than access OpenSearch directly.
+
+---
+
+# 41. Images and Assets
+
+Images must be optimized for their context.
+
+Consider:
+
+- Appropriate dimensions.
+- Modern formats.
+- Responsive sizing.
+- Lazy loading where appropriate.
+- Priority loading for critical above-the-fold assets.
+
+Do not ship full-resolution assets when a smaller representation is sufficient.
+
+Avoid unnecessary duplicate assets.
+
+---
+
+# 42. Client Storage
+
+Use browser storage deliberately.
+
+Before storing data in:
+
+- `localStorage`
+- `sessionStorage`
+- IndexedDB
+- Cookies
+
+determine:
+
+- Sensitivity.
+- Lifetime.
+- Scope.
+- Synchronization.
+- Security implications.
+
+Never store highly sensitive credentials in insecure browser storage.
+
+Do not use local storage as a substitute for proper server-side session management.
+
+---
+
+# 43. Browser APIs
+
+Browser APIs must be isolated behind appropriate abstractions when reused.
+
+Examples:
+
+- Notifications.
+- Geolocation.
+- Clipboard.
+- Storage.
+- Media devices.
+
+Handle unsupported browsers and denied permissions gracefully.
+
+Never assume a browser API is available in Server Components.
+
+---
+
+# 44. Side Effects
+
+Side effects must have clear ownership.
+
+Examples:
+
+- API calls.
+- Event listeners.
+- Timers.
+- Subscriptions.
+- Browser storage.
+- WebSocket connections.
+
+Clean up resources when required.
+
+Avoid using `useEffect` to derive values that can be calculated during rendering.
+
+Bad:
+
+```tsx
+useEffect(() => {
+  setTotal(price * quantity);
+}, [price, quantity]);
+```
+
+Prefer derived computation:
+
+```tsx
+const total = price * quantity;
+```
+
+---
+
+# 45. Data Fetching
+
+Data fetching must have an explicit lifecycle.
+
+Avoid fetching the same resource independently from multiple unrelated components unless the caching layer intentionally handles it.
+
+Consider:
+
+- Initial load.
+- Refetching.
+- Cache lifetime.
+- Stale data.
+- Error state.
+- Authentication.
+- Tenant context.
+- Pagination.
+
+Avoid waterfalls where independent data can be fetched concurrently.
+
+---
+
+# 46. API Request Cancellation
+
+Long-running or rapidly changing requests should support cancellation where appropriate.
+
+Examples:
+
+- Search.
+- Autocomplete.
+- Rapid filter changes.
+- Route transitions.
+
+Do not allow obsolete requests to overwrite newer state.
+
+---
+
+# 47. Real-Time Features
+
+For real-time features such as:
+
+- Community chat.
+- Notifications.
+- Order status.
+- Booking status.
+
+define:
+
+- Connection lifecycle.
+- Authentication.
+- Reconnection.
+- Backoff.
+- Message ordering.
+- Duplicate handling.
+- Offline behavior.
+- State synchronization.
+
+Do not assume WebSocket delivery is perfectly ordered or exactly once.
+
+---
+
+# 48. Client-Side Security
+
+Never trust client-side state for security decisions.
+
+The frontend must not:
+
+- Expose secrets.
+- Construct privileged requests without server authorization.
+- Trust user-editable role values.
+- Assume hidden UI is secure.
+- Store sensitive backend credentials.
+
+Treat all browser-controlled data as untrusted.
+
+---
+
+# 49. XSS Prevention
+
+Never inject arbitrary HTML without a strong reason and explicit sanitization.
+
+Avoid:
+
+```tsx
+dangerouslySetInnerHTML
+```
+
+unless:
+
+- The content source is understood.
+- Sanitization is applied where required.
+- The use case is documented.
+- Security review has been performed.
+
+Never render unsanitized user-generated HTML.
+
+---
+
+# 50. Navigation
+
+Navigation should use the framework's routing mechanisms consistently.
+
+Avoid manual URL manipulation when framework routing provides the correct abstraction.
+
+Handle:
+
+- Loading.
+- Not found.
+- Unauthorized.
+- Redirects.
+- Deep links.
+- Query parameters.
+
+Navigation state should remain predictable after refresh.
+
+---
+
+# 51. Error Boundaries
+
+Use appropriate error boundaries for isolated UI failures.
+
+A failure in one feature should not unnecessarily destroy unrelated application functionality.
+
+Error boundaries should provide:
+
+- Useful fallback UI.
+- Recovery where possible.
+- Logging/observability.
+- Safe error messaging.
+
+Do not expose internal stack traces to users.
+
+---
+
+# 52. Environment Configuration
+
+Frontend environment variables must be classified carefully.
+
+Only intentionally public variables may be exposed to browser code.
+
+Never expose:
+
+- Database URLs.
+- Private API keys.
+- Service credentials.
+- Internal secrets.
+
+Environment configuration should be validated where appropriate.
+
+Missing required configuration should fail clearly.
+
+---
+
+# 53. Feature Flags
+
+Feature flags must have:
+
+- Clear ownership.
+- Defined scope.
+- Explicit default behavior.
+- Removal criteria.
+
+Do not leave permanent dead feature flags in the codebase.
+
+Avoid scattering raw flag checks throughout unrelated components.
+
+---
+
+# 54. Internationalization and Formatting
+
+User-visible formatting must account for:
+
+- Locale.
+- Currency.
+- Date.
+- Timezone.
+- Number formatting.
+
+Do not hardcode formatting assumptions when the product supports multiple locales or campuses with different regional settings.
+
+Business calculations must not depend on display formatting.
+
+---
+
+# 55. Frontend Error Logging
+
+Client errors should be observable without leaking sensitive information.
+
+Log useful context such as:
+
+- Feature.
+- Route.
+- Operation.
+- Error category.
+- Request/correlation ID where available.
+
+Do not log:
+
+- Passwords.
+- Tokens.
+- Sensitive form values.
+- Private user data unnecessarily.
+
+---
+
+# 56. Testing
+
+Frontend changes must include appropriate tests.
+
+Test:
+
+- Component behavior.
+- User interactions.
+- Forms.
+- Validation.
+- Loading states.
+- Error states.
+- Empty states.
+- Accessibility-critical behavior.
+- State transitions.
+- API integration boundaries.
+
+Prefer testing user-visible behavior over implementation details.
+
+Avoid tests that break merely because internal component structure changes.
+
+---
+
+# 57. Snapshot Testing
+
+Do not use snapshots as the primary form of frontend correctness testing.
+
+Prefer explicit assertions about:
+
+- Visible content.
+- Interactions.
+- Accessibility.
+- State.
+- Navigation.
+- API behavior.
+
+Use snapshots only when they provide meaningful regression value.
+
+---
+
+# 58. Dependency Discipline
+
+Before adding a frontend dependency:
+
+1. Search for an existing solution.
+2. Check whether native platform functionality is sufficient.
+3. Check whether the existing stack already provides the capability.
+4. Evaluate bundle size.
+5. Evaluate maintenance.
+6. Evaluate security.
+7. Evaluate licensing.
+8. Consider self-hosted deployment implications.
+
+Do not add dependencies for trivial functionality.
+
+---
+
+# 59. Generated Code
+
+Generated API clients, types, schemas, or assets must be clearly separated from handwritten code.
+
+Do not manually edit generated files unless the generation workflow explicitly permits it.
+
+Document:
+
+- Generator.
+- Source.
+- Command.
+- Regeneration process.
+
+Generated code must not become an undocumented source of truth.
+
+---
+
+# 60. Frontend Documentation
+
+Document non-obvious frontend architecture.
+
+Document:
+
+- State ownership.
+- Feature boundaries.
+- Complex data flows.
+- Authentication behavior.
+- Real-time architecture.
+- Important rendering decisions.
+- Design-system conventions.
+- Complex accessibility decisions.
+
+Do not document obvious code merely to increase documentation volume.
+
+---
+
+# 61. Frontend Change Checklist
+
+Before completing a frontend change, verify:
+
+- [ ] Existing components were searched first.
+- [ ] Correct Server/Client boundary is used.
+- [ ] Component responsibilities are clear.
+- [ ] State ownership is explicit.
+- [ ] TanStack Query is used for server state.
+- [ ] Zustand is used only for appropriate client state.
+- [ ] URL state is used where appropriate.
+- [ ] Runtime boundaries are validated with Zod where required.
+- [ ] API contracts remain typed and explicit.
+- [ ] Loading state exists where appropriate.
+- [ ] Error state exists where appropriate.
+- [ ] Empty state exists where appropriate.
+- [ ] Accessibility was considered.
+- [ ] Responsive behavior was considered.
+- [ ] Security boundaries are preserved.
+- [ ] No unnecessary client components were introduced.
+- [ ] No unnecessary dependencies were added.
+- [ ] No unnecessary memoization was introduced.
+- [ ] Large lists are bounded.
+- [ ] API requests are not duplicated unnecessarily.
+- [ ] Tests cover meaningful behavior.
+- [ ] Documentation was updated where necessary.
+- [ ] The final diff remains focused.
+
+---
+
+# 62. Final Frontend Principle
+
+Frontend architecture should make the correct behavior easy to implement and the incorrect behavior difficult to introduce.
+
+Prefer:
+
+```text
+Clear components
+    ↓
+Explicit state ownership
+    ↓
+Typed contracts
+    ↓
+Validated boundaries
+    ↓
+Predictable data fetching
+    ↓
+Accessible UI
+    ↓
+Measured performance
+    ↓
+Tested behavior
+```
+
+Do not allow frontend convenience to become a substitute for backend correctness, security, or domain integrity.

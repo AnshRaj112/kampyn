@@ -1,6 +1,1170 @@
 ---
-description: Code-review checklist and completion guidance
-alwaysApply: false
+description: KAMPYN engineering review rules for correctness, architecture, security, performance, testing, maintainability, and final change verification.
+alwaysApply: true
 ---
 
-Before completing a change, review correctness, architecture, security, performance, tests, documentation, and diff scope against `AGENTS.md`.
+# KAMPYN Engineering Review Rules
+
+## 1. Purpose
+
+Every meaningful code change must be reviewed before it is considered complete.
+
+Review is not a formatting exercise.
+
+The purpose of review is to determine whether the change:
+
+- Solves the intended problem.
+- Preserves existing behavior.
+- Fits the architecture.
+- Maintains data integrity.
+- Preserves security boundaries.
+- Meets performance requirements.
+- Has appropriate tests.
+- Avoids unnecessary complexity.
+- Introduces no obvious regressions.
+- Is understandable and maintainable.
+
+A change is not complete merely because it compiles.
+
+---
+
+# 2. Review Order
+
+Review changes in this order:
+
+```text
+Intent
+  ↓
+Correctness
+  ↓
+Architecture
+  ↓
+Security
+  ↓
+Data Integrity
+  ↓
+Performance
+  ↓
+Concurrency
+  ↓
+Testing
+  ↓
+Maintainability
+  ↓
+Documentation
+  ↓
+Diff Hygiene
+```
+
+Do not spend significant time on style while a correctness or security problem remains unresolved.
+
+---
+
+# 3. Understand the Change First
+
+Before reviewing implementation details, determine:
+
+1. What problem is being solved?
+2. What behavior is changing?
+3. What behavior must remain unchanged?
+4. Which modules are affected?
+5. Which contracts are affected?
+6. Which data is affected?
+7. Which users or tenants are affected?
+8. What are the expected failure modes?
+9. What tests should prove correctness?
+
+Do not review code without understanding its intended behavior.
+
+---
+
+# 4. Review the Actual Diff
+
+Review the actual changed files and lines.
+
+Do not assume that:
+
+- All changes are intentional.
+- All modified files are required.
+- The implementation matches the description.
+- Unrelated changes are harmless.
+
+Look for:
+
+- Unrelated modifications.
+- Debug code.
+- Temporary workarounds.
+- Generated files.
+- Accidental formatting changes.
+- Unused imports.
+- Dead code.
+- Configuration changes.
+- Dependency changes.
+- Migration changes.
+- Secret exposure.
+
+The diff is the primary review surface.
+
+---
+
+# 5. Review Scope
+
+Every change should have a clear scope.
+
+Ask:
+
+```text
+Does every changed line contribute to the requested change?
+```
+
+If not, determine whether the unrelated change should be:
+
+- Removed.
+- Split into a separate change.
+- Explicitly justified.
+
+Avoid combining:
+
+```text
+feature
++
+large refactor
++
+dependency migration
++
+formatting rewrite
+```
+
+without a strong reason.
+
+---
+
+# 6. Correctness
+
+Verify that the implementation actually satisfies the requirement.
+
+Check:
+
+- Happy paths.
+- Boundary conditions.
+- Invalid inputs.
+- Missing data.
+- Empty states.
+- Failure paths.
+- Partial failures.
+- Retries.
+- Concurrent requests.
+- Duplicate requests.
+- State transitions.
+
+Do not review only the most obvious successful execution path.
+
+---
+
+# 7. Requirements Coverage
+
+For every requirement, identify where it is implemented and tested.
+
+Use:
+
+```text
+Requirement
+    ↓
+Implementation
+    ↓
+Verification
+```
+
+A requirement without implementation is incomplete.
+
+An implementation without verification should be treated as unproven.
+
+Do not assume an undocumented behavior is correct merely because it appears reasonable.
+
+---
+
+# 8. Regression Review
+
+Ask:
+
+- What existing behavior could this change break?
+- Which callers depend on the modified behavior?
+- Are existing API contracts preserved?
+- Are existing database assumptions preserved?
+- Are existing events still compatible?
+- Are existing clients still compatible?
+- Are existing permissions preserved?
+
+Search callers and consumers before approving changes to shared code.
+
+---
+
+# 9. Architecture Review
+
+Verify that the change respects the architectural boundaries defined by:
+
+- `AGENTS.md`
+- `.ai/`
+- `.cursor/rules/`
+- Existing module boundaries
+
+Check:
+
+- Dependency direction.
+- Domain ownership.
+- Layer boundaries.
+- Shared code boundaries.
+- API boundaries.
+- Database ownership.
+- Infrastructure boundaries.
+
+Reject architectural shortcuts that create long-term coupling merely to make the current task easier.
+
+---
+
+# 10. Dependency Direction
+
+Dependencies must flow in the intended direction.
+
+Watch for:
+
+```text
+Domain → Infrastructure
+Domain → HTTP framework
+Domain → Database implementation
+```
+
+when those dependencies violate the established architecture.
+
+Also watch for:
+
+- Circular dependencies.
+- Feature modules importing internal implementation details from unrelated features.
+- Shared modules depending on feature-specific modules.
+- Infrastructure leaking into presentation code.
+
+---
+
+# 11. Reuse Review
+
+Before approving new abstractions, verify that existing functionality was considered.
+
+Look for:
+
+- Duplicated API clients.
+- Duplicated validation.
+- Duplicated formatting.
+- Duplicated database operations.
+- Duplicated UI components.
+- Duplicated business rules.
+
+But do not force unrelated functionality into a generic abstraction solely to eliminate textual duplication.
+
+The correct question is:
+
+```text
+Do these implementations represent the same concept?
+```
+
+not:
+
+```text
+Do these implementations look similar?
+```
+
+---
+
+# 12. Abstraction Review
+
+Every abstraction should justify its existence.
+
+Review whether it:
+
+- Has a clear responsibility.
+- Has more than one meaningful use case where appropriate.
+- Reduces complexity rather than hiding it.
+- Has a stable contract.
+- Is located in the correct module.
+
+Watch for:
+
+- Generic helpers.
+- Generic managers.
+- Generic services.
+- Generic repositories.
+- Generic hooks.
+- Generic wrappers.
+
+that exist only because the code was considered "cleaner."
+
+Prefer concrete code until a real abstraction emerges.
+
+---
+
+# 13. API Review
+
+For API changes, verify:
+
+- Request validation.
+- Authentication.
+- Authorization.
+- Tenant isolation.
+- Status codes.
+- Response contracts.
+- Error contracts.
+- Pagination.
+- Rate limiting where required.
+- Idempotency.
+- Retry behavior.
+- Timeout behavior.
+- Backward compatibility.
+
+Ask:
+
+```text
+Can an older client safely interact with the changed API?
+```
+
+when compatibility is required.
+
+---
+
+# 14. Database Review
+
+For database changes, verify:
+
+- Correct datastore.
+- Correct ownership.
+- Schema design.
+- Constraints.
+- Foreign keys where appropriate.
+- Indexes.
+- Query performance.
+- Transaction boundaries.
+- Concurrency safety.
+- Migration safety.
+- Backfill behavior.
+- Rollout compatibility.
+- Tenant isolation.
+- Backup/recovery implications.
+
+Never approve a migration merely because it succeeds on an empty development database.
+
+---
+
+# 15. Data Integrity Review
+
+Pay particular attention to operations involving:
+
+- Orders.
+- Payments.
+- Inventory.
+- Reservations.
+- Bookings.
+- User accounts.
+- Permissions.
+- Financial data.
+
+Ask:
+
+```text
+What happens if two requests execute this operation simultaneously?
+```
+
+Then verify that the implementation preserves the required invariant.
+
+---
+
+# 16. Security Review
+
+Every change must preserve existing security boundaries.
+
+Check:
+
+### Authentication
+- Is the caller authenticated where required?
+- Can authentication be bypassed?
+
+### Authorization
+- Is authorization enforced server-side?
+- Can object-level authorization be bypassed?
+- Can privilege escalation occur?
+
+### Tenant isolation
+- Can one tenant access another tenant's data?
+
+### Input handling
+- Are untrusted inputs validated?
+- Is injection possible?
+- Is unsafe HTML rendered?
+
+### Secrets
+- Are secrets exposed?
+- Are credentials logged?
+- Are private values sent to the client?
+
+### Files
+- Is path traversal possible?
+- Are uploads validated?
+
+### External systems
+- Are webhooks authenticated?
+- Are external responses trusted safely?
+
+Security-sensitive changes require particularly careful review.
+
+---
+
+# 17. Performance Review
+
+Review performance based on actual workload.
+
+Check:
+
+- Algorithmic complexity.
+- Database query count.
+- N+1 queries.
+- Memory usage.
+- Network requests.
+- Payload size.
+- Serialization.
+- Cache behavior.
+- Concurrency.
+- Large dataset behavior.
+
+Ask:
+
+```text
+What happens at 10x the expected current workload?
+```
+
+and where appropriate:
+
+```text
+What happens at 100x?
+```
+
+Do not approve an implementation that works only because current development data is small.
+
+---
+
+# 18. Complexity Review
+
+Look for avoidable:
+
+- O(n²)
+- O(n³)
+- Repeated scans.
+- Nested database queries.
+- Repeated serialization.
+- Repeated network requests.
+- Full collection scans.
+- Unbounded loops.
+
+An O(n²) implementation is not automatically incorrect.
+
+It requires justification when:
+
+- Inputs can become large.
+- The operation is frequent.
+- The operation is latency-sensitive.
+- A materially better algorithm exists.
+
+Prefer appropriate data structures and algorithms over premature micro-optimization.
+
+---
+
+# 19. Concurrency Review
+
+Concurrency bugs are often invisible in ordinary testing.
+
+Review operations involving:
+
+- Goroutines.
+- Workers.
+- Queues.
+- Background jobs.
+- WebSockets.
+- Shared state.
+- Caches.
+- Database transactions.
+- Distributed locks.
+
+Ask:
+
+- Can operations execute concurrently?
+- Can the same job execute twice?
+- Can messages arrive out of order?
+- Can state be overwritten?
+- Can resources leak?
+- Can deadlocks occur?
+- Is retry behavior safe?
+
+Do not assume sequential execution unless the architecture guarantees it.
+
+---
+
+# 20. Idempotency Review
+
+Any operation that may be retried should be reviewed for idempotency.
+
+Especially:
+
+- Payments.
+- Orders.
+- Reservations.
+- Booking.
+- Inventory changes.
+- Webhooks.
+- Background jobs.
+- Event consumers.
+
+Verify that retries do not accidentally:
+
+- Duplicate orders.
+- Charge twice.
+- Reserve twice.
+- Decrement inventory twice.
+- Create duplicate records.
+
+---
+
+# 21. Error Handling Review
+
+Review both expected and unexpected failures.
+
+Check:
+
+- Errors are not swallowed.
+- Errors are not unnecessarily exposed.
+- Errors contain useful context.
+- Internal details are not leaked.
+- Retries are bounded.
+- Retryable and non-retryable errors are distinguished.
+- Resources are cleaned up.
+- Partial failure is handled intentionally.
+
+Avoid patterns such as:
+
+```text
+catch error
+    return null
+```
+
+when the failure is meaningful.
+
+---
+
+# 22. Resource Management
+
+Review resource ownership.
+
+Resources include:
+
+- Database connections.
+- Transactions.
+- File handles.
+- HTTP connections.
+- Goroutines.
+- Timers.
+- Event listeners.
+- WebSocket connections.
+- Streams.
+- Temporary files.
+
+Every acquired resource should have a clear release path.
+
+---
+
+# 23. Frontend Review
+
+For frontend changes, verify:
+
+- Server/client boundary.
+- State ownership.
+- TanStack Query usage.
+- Zustand usage.
+- URL state.
+- Runtime validation.
+- Loading states.
+- Error states.
+- Empty states.
+- Accessibility.
+- Responsive behavior.
+- Rendering behavior.
+- API request duplication.
+- Large list handling.
+
+Check that server state has not been unnecessarily duplicated into client state.
+
+---
+
+# 24. Backend Review
+
+For backend changes, verify:
+
+- Handler responsibilities.
+- Application service boundaries.
+- Domain logic placement.
+- Repository boundaries.
+- Context propagation.
+- Error handling.
+- Transactions.
+- Concurrency.
+- Background jobs.
+- External integrations.
+- Logging.
+- Metrics.
+- Tracing.
+- Configuration.
+
+Do not allow handlers to become business-logic containers.
+
+---
+
+# 25. Testing Review
+
+A review must determine whether the tests prove the important behavior.
+
+Check:
+
+- Happy path.
+- Negative path.
+- Boundary conditions.
+- Authorization.
+- Validation.
+- Error handling.
+- Concurrency where relevant.
+- Idempotency where relevant.
+- Regression scenarios.
+
+Do not accept tests that merely execute code without asserting meaningful behavior.
+
+---
+
+# 26. Test Quality
+
+Good tests should be:
+
+- Deterministic.
+- Isolated.
+- Understandable.
+- Focused.
+- Repeatable.
+
+Avoid tests that depend on:
+
+- Execution order.
+- Shared mutable state.
+- Real external services unnecessarily.
+- Wall-clock timing unnecessarily.
+- Developer-specific environments.
+
+Do not weaken production code merely to make tests easier.
+
+---
+
+# 27. Coverage Review
+
+Coverage is a signal, not proof of correctness.
+
+High coverage does not compensate for:
+
+- Missing assertions.
+- Missing edge cases.
+- Missing authorization tests.
+- Missing concurrency tests.
+- Missing integration tests.
+
+Review whether important behavior is actually exercised.
+
+Do not add meaningless tests merely to increase coverage percentages.
+
+---
+
+# 28. Documentation Review
+
+Determine whether the change requires documentation updates.
+
+Potentially affected documentation includes:
+
+- README.
+- Architecture documentation.
+- API documentation.
+- Database documentation.
+- Deployment documentation.
+- Configuration documentation.
+- Runbooks.
+- SDK documentation.
+- Self-hosting documentation.
+- ADRs.
+
+If behavior changes but documentation becomes incorrect, the change is incomplete.
+
+---
+
+# 29. Configuration Review
+
+Review changes to:
+
+- Environment variables.
+- Feature flags.
+- Deployment configuration.
+- Kubernetes manifests.
+- Docker configuration.
+- CI/CD.
+- Runtime limits.
+- Database configuration.
+
+Verify:
+
+- Defaults.
+- Required values.
+- Environment separation.
+- Secret handling.
+- Backward compatibility.
+
+---
+
+# 30. Dependency Review
+
+When dependencies change, verify:
+
+- Why the dependency is required.
+- Whether an existing dependency already provides the capability.
+- Version compatibility.
+- Security implications.
+- Bundle/runtime impact.
+- License implications.
+- Lockfile changes.
+- Transitive dependencies.
+
+Do not approve dependencies added solely for trivial functionality.
+
+---
+
+# 31. Migration and Deployment Review
+
+Changes involving schemas, APIs, infrastructure, or configuration must be reviewed for deployment ordering.
+
+Ask:
+
+```text
+What happens if:
+    old application + new infrastructure
+    new application + old infrastructure
+```
+
+during rolling deployments?
+
+Where relevant, verify:
+
+- Backward compatibility.
+- Migration ordering.
+- Rollback behavior.
+- Partial deployment behavior.
+- Feature-flag sequencing.
+
+---
+
+# 32. Observability Review
+
+Significant production behavior should be observable.
+
+Review whether the change provides appropriate:
+
+- Logs.
+- Metrics.
+- Traces.
+- Correlation IDs.
+- Error reporting.
+
+Observability should answer:
+
+```text
+What happened?
+Where?
+For whom/which tenant?
+How often?
+How long did it take?
+Why did it fail?
+```
+
+without exposing sensitive information.
+
+---
+
+# 33. Security and Privacy in Observability
+
+Review logs and telemetry for accidental leakage.
+
+Never approve logging of:
+
+- Passwords.
+- Tokens.
+- Secrets.
+- Payment credentials.
+- Sensitive personal information unnecessarily.
+
+Prefer structured metadata over dumping complete request/response bodies.
+
+---
+
+# 34. Self-Hosted Deployment Review
+
+KAMPYN may be deployed by universities in their own infrastructure.
+
+For changes affecting deployment, verify:
+
+- Configuration is documented.
+- External dependencies are explicit.
+- Required services are documented.
+- Database migrations are reproducible.
+- Environment variables are documented.
+- Health checks exist where required.
+- Resource requirements are understood.
+- No hidden dependency on EXSOLVIA infrastructure exists unless explicitly intended.
+
+Self-hosted installations must not depend on undocumented local assumptions.
+
+---
+
+# 35. SDK and Contract Review
+
+Changes affecting public SDKs or shared contracts require additional review.
+
+Check:
+
+- Backward compatibility.
+- Type compatibility.
+- Serialization compatibility.
+- Versioning.
+- Deprecation behavior.
+- Documentation.
+- Examples.
+- Generated clients where applicable.
+
+Do not silently break consumers of public interfaces.
+
+---
+
+# 36. Generated Files
+
+Determine whether modified generated files are intentional.
+
+If generated:
+
+- Identify the generator.
+- Verify the source change.
+- Regenerate through the documented workflow.
+- Avoid manually editing generated output.
+
+Do not approve generated changes without understanding their source.
+
+---
+
+# 37. Dead Code and Cleanup
+
+Review for:
+
+- Unused functions.
+- Unused imports.
+- Dead branches.
+- Obsolete flags.
+- Deprecated code.
+- Commented-out implementations.
+- Temporary debugging code.
+
+Remove dead code when it belongs to the current change.
+
+Do not perform unrelated cleanup merely because it is visible.
+
+---
+
+# 38. Naming Review
+
+Names should communicate intent.
+
+Review:
+
+- Functions.
+- Variables.
+- Types.
+- Components.
+- Hooks.
+- Services.
+- Repositories.
+- Database fields.
+- API fields.
+
+Avoid vague names such as:
+
+```text
+data
+result
+temp
+helper
+manager
+thing
+process
+handle
+```
+
+when a more precise name is available.
+
+---
+
+# 39. Comments Review
+
+Comments should explain:
+
+- Why something is necessary.
+- Non-obvious constraints.
+- Architectural decisions.
+- External limitations.
+- Important invariants.
+
+Do not add comments that merely restate the code.
+
+Bad:
+
+```ts
+// Increment counter
+counter++;
+```
+
+Useful:
+
+```ts
+// Keep this operation atomic because concurrent order creation
+// can otherwise allocate the same inventory slot.
+```
+
+---
+
+# 40. Review Findings
+
+Review findings should be specific and actionable.
+
+A useful finding should identify:
+
+1. What is wrong.
+2. Why it matters.
+3. Where it occurs.
+4. What behavior could result.
+5. What type of correction is appropriate.
+
+Avoid vague feedback such as:
+
+```text
+This could be cleaner.
+```
+
+Prefer:
+
+```text
+This query loads every order before filtering by tenant. The dataset
+is unbounded, so memory usage grows with total order count rather than
+the requested page size. Apply tenant filtering and bounded pagination
+at the database layer.
+```
+
+---
+
+# 41. Severity
+
+Classify findings based on impact.
+
+### Blocker
+
+The change must not be merged because it creates a serious:
+
+- Correctness failure.
+- Security vulnerability.
+- Data-integrity issue.
+- Production-breaking behavior.
+
+### High
+
+The change has a substantial:
+
+- Functional defect.
+- Performance problem.
+- Reliability issue.
+- Compatibility problem.
+
+### Medium
+
+The change introduces meaningful:
+
+- Maintainability issue.
+- Test gap.
+- Architectural inconsistency.
+- Operational risk.
+
+### Low
+
+The issue is useful to improve but does not materially affect correctness or operation.
+
+Do not inflate severity to force stylistic preferences.
+
+---
+
+# 42. Review Findings Must Be Evidence-Based
+
+Do not report speculative problems as confirmed defects.
+
+Distinguish between:
+
+```text
+Confirmed defect
+Potential risk
+Architectural concern
+Improvement suggestion
+```
+
+If behavior cannot be established from the code, tests, documentation, or execution evidence, say so.
+
+Do not invent runtime behavior.
+
+---
+
+# 43. Verification
+
+Before approving a change, run the appropriate verification available for the repository.
+
+At minimum, where applicable:
+
+- Formatting.
+- Linting.
+- Type checking.
+- Unit tests.
+- Integration tests.
+- API tests.
+- Build.
+- Relevant migration validation.
+
+For larger changes, run the broader test suite.
+
+Never claim:
+
+```text
+Tests pass
+```
+
+unless the tests were actually executed and passed.
+
+---
+
+# 44. Diff Review After Verification
+
+Verification is not the final step.
+
+After tests complete:
+
+1. Inspect the final diff again.
+2. Check generated changes.
+3. Check formatting changes.
+4. Check accidental files.
+5. Check configuration changes.
+6. Check migrations.
+7. Check secrets.
+8. Confirm the implementation still matches the requirement.
+
+The final diff must represent the intended change and nothing unexpected.
+
+---
+
+# 45. Review Completion Standard
+
+A change is review-complete only when:
+
+```text
+Requirement understood
+        ↓
+Implementation inspected
+        ↓
+Architecture verified
+        ↓
+Security reviewed
+        ↓
+Data integrity reviewed
+        ↓
+Performance reviewed
+        ↓
+Concurrency reviewed
+        ↓
+Tests reviewed/run
+        ↓
+Documentation reviewed
+        ↓
+Final diff inspected
+        ↓
+No unresolved blocking findings
+```
+
+Do not mark a change complete merely because no obvious syntax errors remain.
+
+---
+
+# 46. Final Review Checklist
+
+Before approving any meaningful change:
+
+- [ ] Requirement is understood.
+- [ ] Actual diff was inspected.
+- [ ] Scope is focused.
+- [ ] Correctness is verified.
+- [ ] Existing behavior was considered.
+- [ ] Architecture is preserved.
+- [ ] Dependencies flow correctly.
+- [ ] Reuse was considered.
+- [ ] Abstractions are justified.
+- [ ] API contracts are safe.
+- [ ] Database changes are safe.
+- [ ] Data integrity is preserved.
+- [ ] Concurrency behavior is understood.
+- [ ] Idempotency is handled where required.
+- [ ] Security boundaries are preserved.
+- [ ] Tenant isolation is preserved.
+- [ ] Performance implications are understood.
+- [ ] Resource usage is bounded.
+- [ ] Error handling is appropriate.
+- [ ] Tests meaningfully verify behavior.
+- [ ] Documentation is accurate.
+- [ ] Configuration changes are safe.
+- [ ] Dependencies are justified.
+- [ ] Observability is sufficient.
+- [ ] Deployment compatibility is considered.
+- [ ] Final verification was executed where applicable.
+- [ ] Final diff was reviewed.
+- [ ] No blocking findings remain.
+
+---
+
+# 47. Final Review Principle
+
+Review is a correctness gate, not a ceremony.
+
+The goal is not to make every change perfect.
+
+The goal is to ensure that every accepted change is:
+
+```text
+Correct
+Secure
+Architecturally consistent
+Performant enough for its workload
+Tested
+Observable
+Maintainable
+Operationally safe
+```
+
+Prefer evidence over assumption.
+
+Prefer simple corrections over large rewrites.
+
+Prefer preventing defects over documenting them after the fact.
+
+A change should be approved because its behavior and risks are understood, not because it merely looks reasonable.

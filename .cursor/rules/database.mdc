@@ -1,6 +1,1521 @@
 ---
-description: Database engineering guidance
-alwaysApply: false
+description: KAMPYN database engineering rules covering PostgreSQL, MongoDB, Redis, data modeling, migrations, transactions, indexing, consistency, performance, multi-tenancy, backups, and data integrity.
+alwaysApply: true
 ---
 
-Apply the repository's database, migration, transaction, indexing, and data-access rules in `AGENTS.md` and the applicable `.ai/` policies.
+# KAMPYN Database Engineering Rules
+
+## 1. Purpose
+
+Database code is part of the system's architecture, not merely persistence code.
+
+Database decisions must preserve:
+
+- Data correctness
+- Data integrity
+- Consistency
+- Clear ownership
+- Predictable performance
+- Scalability
+- Security
+- Recoverability
+- Migration safety
+- Operational simplicity
+
+The database must never become a dumping ground for poorly structured application logic.
+
+---
+
+# 2. Database Responsibilities
+
+Every database operation must have a clear purpose.
+
+Database responsibilities include:
+
+- Persisting durable application state
+- Enforcing appropriate data integrity
+- Supporting efficient queries
+- Providing transactional guarantees where required
+- Supporting required consistency guarantees
+- Maintaining durable relationships
+- Supporting reliable recovery
+- Providing appropriately indexed access paths
+
+Application code remains responsible for:
+
+- Business workflows
+- Business policies
+- Authorization decisions
+- External service orchestration
+- Domain behavior
+
+Do not move business logic into database-specific mechanisms unless there is a documented architectural reason.
+
+---
+
+# 3. Database Selection
+
+KAMPYN may use multiple data stores, including:
+
+- PostgreSQL
+- MongoDB
+- Redis
+- OpenSearch
+- Object/file storage where required
+
+Each datastore must have an explicit responsibility.
+
+Do not introduce a database merely because it is convenient for a particular feature.
+
+Before introducing a new datastore, establish:
+
+1. Why the existing stores cannot satisfy the requirement.
+2. What data belongs in the new store.
+3. What consistency guarantees are required.
+4. How data reaches the new store.
+5. How failures are handled.
+6. How backups and recovery work.
+7. How the datastore is monitored.
+8. How the datastore is operated in self-hosted deployments.
+
+---
+
+# 4. Source of Truth
+
+Every durable piece of data must have one authoritative source of truth.
+
+Examples:
+
+- PostgreSQL may own transactional relational data.
+- MongoDB may own document-oriented data where explicitly justified.
+- Redis is not a durable source of truth unless the architecture explicitly defines it as such.
+- OpenSearch is a derived search/indexing system, not the authoritative transactional datastore.
+
+Never treat a cache, search index, materialized projection, or replica as authoritative without an explicit architectural decision.
+
+---
+
+# 5. Data Ownership
+
+Every table, collection, keyspace, or datastore namespace must have an owning domain.
+
+Ownership must be explicit.
+
+A module must not directly modify another domain's database structures merely because they are accessible.
+
+Prefer:
+
+```text
+Domain A
+    ↓
+Domain A Application/API
+    ↓
+Domain B Contract
+```
+
+over:
+
+```text
+Domain A
+    ↓
+Directly modifies Domain B tables
+```
+
+Cross-domain data access must use an explicit contract or approved shared persistence boundary.
+
+---
+
+# 6. PostgreSQL
+
+PostgreSQL should be preferred for strongly relational transactional data where appropriate.
+
+Use relational modeling when the domain requires:
+
+- Strong relationships
+- Referential integrity
+- Transactions across related records
+- Complex relational queries
+- Constraints
+- Aggregations
+- Structured transactional workflows
+
+Use:
+
+- Foreign keys where relationships require database enforcement.
+- Unique constraints for uniqueness guarantees.
+- Check constraints for invariant enforcement where appropriate.
+- Appropriate indexes.
+- Explicit transaction boundaries.
+- Appropriate isolation levels.
+
+Do not use application-level checks as the only protection for invariants that can be safely enforced by the database.
+
+---
+
+# 7. MongoDB
+
+MongoDB should be used when document-oriented modeling provides a meaningful architectural advantage.
+
+Good candidates may include:
+
+- Naturally document-shaped data
+- Variable or evolving schemas where justified
+- Aggregated read models
+- Data whose access patterns strongly favor document retrieval
+- Explicitly approved high-volume document workloads
+
+Do not use MongoDB merely to avoid designing relational models.
+
+Avoid excessive embedding when:
+
+- Embedded data grows without bound.
+- Individual records require independent lifecycle management.
+- Data is frequently updated independently.
+- The embedded collection can become extremely large.
+
+Avoid excessive normalization when it creates unnecessary multi-query reconstruction of naturally document-shaped data.
+
+Model around actual access patterns.
+
+---
+
+# 8. Redis
+
+Redis is primarily an infrastructure component for:
+
+- Caching
+- Distributed coordination where explicitly justified
+- Rate limiting
+- Short-lived state
+- Sessions where architecturally appropriate
+- Distributed locks where absolutely necessary
+- Queues or streams where explicitly designed for that purpose
+
+Redis data must have:
+
+- Explicit ownership.
+- Defined TTL behavior where applicable.
+- Defined invalidation behavior.
+- Defined failure behavior.
+- Tenant-safe keys.
+
+Do not assume Redis is always available.
+
+The application must define what happens when Redis is unavailable.
+
+Never use Redis as an accidental permanent database.
+
+---
+
+# 9. Data Modeling
+
+Data models must represent domain concepts clearly.
+
+Before creating a table or collection, determine:
+
+1. What entity does it represent?
+2. Which domain owns it?
+3. What makes a record unique?
+4. What relationships exist?
+5. What lifecycle does the data have?
+6. What are the common read patterns?
+7. What are the common write patterns?
+8. What volume is expected?
+9. What retention is required?
+10. What consistency guarantees are required?
+
+Avoid:
+
+- Generic catch-all tables.
+- Generic documents containing unrelated data.
+- Excessive nullable fields.
+- Ambiguous names.
+- Hidden relationships.
+- Unbounded arrays.
+- Storing arbitrary JSON where structured fields are required.
+
+---
+
+# 10. Primary Keys and IDs
+
+Primary identifiers must be:
+
+- Unique.
+- Stable.
+- Non-semantic unless there is a strong reason otherwise.
+- Suitable for the expected scale.
+- Consistent within the relevant domain.
+
+Do not encode mutable business meaning into primary keys.
+
+Examples of poor identifiers:
+
+```text
+student_2026_foodcourt_17
+```
+
+when those components may change.
+
+Prefer stable identifiers whose meaning does not depend on mutable business state.
+
+---
+
+# 11. Foreign Keys and Relationships
+
+Use database-enforced relationships when appropriate.
+
+Foreign keys should be preferred when:
+
+- Referential integrity is required.
+- The relationship belongs to the same transactional datastore.
+- The operational cost is acceptable.
+
+Do not remove foreign keys solely to make development easier.
+
+Cross-database relationships cannot rely on database-level foreign keys.
+
+For cross-database relationships:
+
+- Validate identifiers at application boundaries.
+- Define ownership clearly.
+- Handle missing references explicitly.
+- Document consistency expectations.
+
+---
+
+# 12. Constraints
+
+Use database constraints to enforce fundamental invariants where appropriate.
+
+Examples:
+
+- `NOT NULL`
+- `UNIQUE`
+- `CHECK`
+- Foreign keys
+- Appropriate primary keys
+
+Application validation and database constraints serve different purposes.
+
+Application validation provides user-facing feedback.
+
+Database constraints provide final data-integrity protection.
+
+Use both when appropriate.
+
+---
+
+# 13. Nullability
+
+Nullability must represent meaningful domain semantics.
+
+Do not use nullable fields simply because a value is inconvenient to determine.
+
+Distinguish between:
+
+```text
+unknown
+not applicable
+not yet provided
+intentionally absent
+```
+
+when those states have different business meanings.
+
+Prefer explicit state representations when necessary.
+
+---
+
+# 14. Timestamps and Time
+
+Store timestamps consistently.
+
+Prefer UTC for persisted timestamps unless a domain requirement explicitly requires otherwise.
+
+Do not rely on application server local time.
+
+Use explicit timezone-aware types where supported.
+
+Business-local time must be converted deliberately.
+
+Never assume:
+
+```text
+server timezone == user timezone
+```
+
+or:
+
+```text
+database timezone == campus timezone
+```
+
+Time-sensitive logic must account for:
+
+- Timezones
+- Daylight-saving behavior where relevant
+- Date boundaries
+- Scheduling semantics
+- Clock precision
+
+---
+
+# 15. Soft Deletes
+
+Soft deletion must be intentional.
+
+Use soft deletion when:
+
+- Records must remain auditable.
+- Historical references must remain valid.
+- Restoration is required.
+- Regulatory or business requirements require retention.
+
+Do not automatically add:
+
+```text
+deleted_at
+```
+
+to every table.
+
+If soft deletion is used:
+
+- Define query semantics.
+- Define uniqueness behavior.
+- Define indexing.
+- Define cascading behavior.
+- Define retention/purge policy.
+
+---
+
+# 16. Schema Evolution
+
+Database schemas must evolve through controlled migrations.
+
+Never modify production schemas manually when the change can be represented as a migration.
+
+Migrations must be:
+
+- Versioned.
+- Reproducible.
+- Reviewable.
+- Ordered.
+- Tested.
+- Safe to deploy.
+
+A migration must not depend on undocumented manual steps.
+
+---
+
+# 17. Migration Safety
+
+Prefer backward-compatible migration sequences.
+
+For potentially breaking changes, use staged migrations.
+
+Example:
+
+```text
+1. Add new field
+2. Deploy code supporting both representations
+3. Backfill data
+4. Switch reads
+5. Switch writes
+6. Verify
+7. Remove old field
+```
+
+Avoid:
+
+```text
+Rename/drop column
+        ↓
+Deploy application
+```
+
+when running application instances may still depend on the old schema.
+
+Production migrations must consider:
+
+- Existing data.
+- Running application versions.
+- Lock duration.
+- Table size.
+- Index creation cost.
+- Rollback strategy.
+- Deployment ordering.
+
+---
+
+# 18. Data Backfills
+
+Large backfills must be treated as production workloads.
+
+Do not blindly execute:
+
+```sql
+UPDATE huge_table
+SET ...
+```
+
+without considering:
+
+- Locking.
+- Transaction size.
+- Replication impact.
+- CPU.
+- I/O.
+- Memory.
+- Query contention.
+- Retry behavior.
+
+Prefer:
+
+- Batching.
+- Checkpointing.
+- Resumable processing.
+- Progress tracking.
+- Controlled concurrency.
+
+Backfills must be idempotent whenever practical.
+
+---
+
+# 19. Transactions
+
+Transactions must have explicit boundaries.
+
+A transaction should represent one coherent atomic operation.
+
+Do not create unnecessarily large transactions.
+
+Avoid holding transactions open while performing:
+
+- Network requests.
+- External API calls.
+- Long computations.
+- User interaction.
+- Unbounded loops.
+
+Prefer:
+
+```text
+Begin transaction
+    ↓
+Read/write required database state
+    ↓
+Commit
+    ↓
+Perform external side effect
+```
+
+When external side effects and database state must remain coordinated, use an appropriate pattern such as an outbox or state-machine workflow rather than holding a database transaction open across the external call.
+
+---
+
+# 20. Isolation and Concurrency
+
+Choose transaction isolation deliberately.
+
+Understand:
+
+- Dirty reads
+- Non-repeatable reads
+- Phantom reads
+- Lost updates
+- Write conflicts
+- Serialization failures
+
+Race-sensitive operations must not rely solely on:
+
+```text
+read
+↓
+check
+↓
+write
+```
+
+when concurrent requests can invalidate the assumption.
+
+Prefer appropriate:
+
+- Unique constraints.
+- Atomic updates.
+- Row locks.
+- Optimistic concurrency.
+- Version columns.
+- Transactions.
+
+Use the simplest mechanism that correctly protects the invariant.
+
+---
+
+# 21. Idempotency
+
+Database operations that may be retried must have defined idempotency behavior.
+
+This is especially important for:
+
+- Payments.
+- Orders.
+- Reservations.
+- Booking.
+- Inventory changes.
+- Webhooks.
+- Background jobs.
+- Distributed events.
+
+Use appropriate mechanisms such as:
+
+- Idempotency keys.
+- Unique constraints.
+- State transitions.
+- Deduplication records.
+- Upserts.
+
+Do not assume retries happen only once.
+
+---
+
+# 22. Inventory and Resource Allocation
+
+Inventory, reservations, booking slots, and other scarce resources require concurrency-safe database logic.
+
+Never rely on:
+
+```text
+SELECT available
+↓
+application checks available > 0
+↓
+UPDATE available
+```
+
+without concurrency protection.
+
+Use appropriate:
+
+- Atomic updates.
+- Conditional updates.
+- Transactions.
+- Row-level locking.
+- Unique constraints.
+- Reservation state machines.
+
+The invariant must remain correct under concurrent requests.
+
+---
+
+# 23. Indexing
+
+Indexes must support actual query patterns.
+
+Before adding an index, understand:
+
+- Which query it serves.
+- Expected selectivity.
+- Query frequency.
+- Sort order.
+- Filtering pattern.
+- Write overhead.
+- Storage cost.
+
+Avoid:
+
+- Indexing every column.
+- Duplicate indexes.
+- Unused indexes.
+- Excessive composite indexes.
+
+Composite indexes must follow actual access patterns.
+
+For example, if queries commonly use:
+
+```text
+tenant_id + status + created_at
+```
+
+the index should be designed around that query pattern rather than arbitrary column ordering.
+
+---
+
+# 24. Query Performance
+
+Database queries must be treated as production code.
+
+Review:
+
+- Query shape.
+- Execution plan where necessary.
+- Index usage.
+- Row counts.
+- Join strategy.
+- Sort operations.
+- Filtering.
+- Pagination.
+- Returned columns.
+
+Do not retrieve data that the caller does not need.
+
+Avoid:
+
+```text
+SELECT *
+```
+
+when a narrower projection is appropriate.
+
+Do not solve a slow query by blindly adding indexes.
+
+First understand the query plan and access pattern.
+
+---
+
+# 25. N+1 Queries
+
+Avoid N+1 query patterns.
+
+Bad:
+
+```text
+Fetch 100 orders
+    ↓
+Query user for each order
+```
+
+Prefer appropriate:
+
+- Joins.
+- Batch queries.
+- Data loaders.
+- Preloading.
+- Aggregation.
+- Denormalized read models where justified.
+
+Do not introduce complex batching when the dataset is inherently tiny and the added complexity provides no meaningful value.
+
+---
+
+# 26. Pagination
+
+Unbounded queries are prohibited for user-facing or potentially large datasets.
+
+Avoid:
+
+```text
+SELECT * FROM orders
+```
+
+for endpoints whose dataset can grow indefinitely.
+
+Prefer:
+
+- Cursor/keyset pagination for large or frequently changing datasets.
+- Offset pagination where datasets are small and access patterns justify it.
+- Explicit page-size limits.
+
+Never allow clients to request arbitrarily large page sizes.
+
+---
+
+# 27. Batch Operations
+
+Use batch operations when they materially reduce:
+
+- Network round trips.
+- Database calls.
+- Serialization overhead.
+- Transaction overhead.
+
+But avoid enormous batches that create:
+
+- Large transactions.
+- Excessive memory usage.
+- Lock contention.
+- Long-running queries.
+
+Batch sizes should be bounded and measurable.
+
+---
+
+# 28. Connection Management
+
+Database connections are finite resources.
+
+Applications must:
+
+- Configure connection pools deliberately.
+- Set appropriate maximum connections.
+- Release connections correctly.
+- Avoid connection leaks.
+- Configure timeouts.
+- Monitor pool exhaustion.
+
+Do not create a new database connection for every request.
+
+Do not create independent pools unnecessarily within the same process.
+
+---
+
+# 29. Database Timeouts
+
+Database operations must not hang indefinitely.
+
+Use appropriate:
+
+- Query timeouts.
+- Connection timeouts.
+- Transaction timeouts.
+- Statement timeouts where supported.
+
+Timeout values must reflect actual workload requirements.
+
+Do not hide slow queries by simply increasing timeout values.
+
+---
+
+# 30. Transactions and External Systems
+
+Never assume a transaction automatically protects external systems.
+
+For example:
+
+```text
+Database transaction
+    ↓
+Payment API
+    ↓
+Commit
+```
+
+can create inconsistent states when the external call fails.
+
+Use appropriate patterns:
+
+- Outbox.
+- Inbox.
+- Saga/state machine.
+- Retryable workflows.
+- Explicit pending states.
+
+The correct pattern depends on the business invariant.
+
+---
+
+# 31. Events and Outbox Pattern
+
+When database changes must reliably produce events, consider a transactional outbox.
+
+Typical flow:
+
+```text
+Database transaction
+    ├── Update domain state
+    └── Insert outbox event
+             ↓
+       Commit transaction
+             ↓
+       Background publisher
+             ↓
+       Event broker / consumer
+```
+
+The outbox event must be:
+
+- Durable.
+- Retryable.
+- Idempotently processed.
+- Observable.
+- Marked with processing state where required.
+
+Do not rely on:
+
+```text
+database commit
+↓
+publish event
+```
+
+when losing the event would violate system correctness.
+
+---
+
+# 32. Read Models and Denormalization
+
+Denormalization is permitted when justified by:
+
+- Measured performance requirements.
+- High-frequency reads.
+- Expensive aggregation.
+- Search/read-model architecture.
+- Explicit scalability requirements.
+
+Denormalized data creates synchronization responsibility.
+
+Whenever data is duplicated, document:
+
+- Source of truth.
+- Projection owner.
+- Update mechanism.
+- Failure behavior.
+- Rebuild strategy.
+
+Never create duplicated fields without defining who owns them.
+
+---
+
+# 33. OpenSearch Data
+
+OpenSearch must be treated as a derived search system.
+
+Typical flow:
+
+```text
+Primary Database
+      ↓
+Event / Projection Pipeline
+      ↓
+OpenSearch
+      ↓
+Search API
+```
+
+Do not make OpenSearch the authoritative source for transactional state.
+
+Search indexes must be rebuildable from the authoritative source whenever practical.
+
+Search synchronization must account for:
+
+- Delayed events.
+- Duplicate events.
+- Failed indexing.
+- Partial indexing.
+- Reindexing.
+- Schema/mapping changes.
+
+---
+
+# 34. Cache and Database Consistency
+
+Caching must not silently create incorrect business behavior.
+
+For cached database data define:
+
+- Cache key.
+- Owner.
+- TTL.
+- Invalidation strategy.
+- Staleness tolerance.
+- Failure behavior.
+
+Do not cache mutable business-critical state without explicitly defining consistency guarantees.
+
+Never allow tenant A's data to be returned from tenant B's cache key.
+
+---
+
+# 35. Multi-Tenancy
+
+KAMPYN may operate across multiple universities or organizations.
+
+Tenant isolation is a database-level concern as well as an application-level concern.
+
+Every tenant-scoped data model must have an explicit tenant boundary where applicable.
+
+Queries must not accidentally omit tenant filtering.
+
+Prefer architectural mechanisms that make tenant filtering difficult to forget.
+
+Review:
+
+- Primary keys.
+- Unique constraints.
+- Foreign keys.
+- Indexes.
+- Cache keys.
+- Search documents.
+- Background jobs.
+- Events.
+- Audit records.
+
+Tenant isolation must survive:
+
+- Concurrent requests.
+- Retries.
+- Background workers.
+- Administrative operations.
+- Search queries.
+- Cache access.
+
+---
+
+# 36. Authorization at the Data Boundary
+
+Database access must not be treated as authorization.
+
+A successful database query does not imply that the requesting user is permitted to see the returned data.
+
+Authorization must occur at the appropriate application/domain boundary.
+
+Where supported and justified, database-level policies may provide defense-in-depth.
+
+Never rely on obscurity of IDs for authorization.
+
+---
+
+# 37. Sensitive Data
+
+Sensitive data must be identified before designing storage.
+
+Consider:
+
+- Whether the data should be stored at all.
+- Encryption at rest.
+- Encryption in transit.
+- Access controls.
+- Retention.
+- Deletion.
+- Audit requirements.
+- Logging restrictions.
+
+Never store secrets, passwords, access tokens, or unnecessary sensitive information in plaintext.
+
+Passwords must use appropriate password hashing rather than reversible encryption.
+
+---
+
+# 38. Audit Data
+
+Security-sensitive or business-critical actions may require audit records.
+
+Examples include:
+
+- Administrative changes.
+- Permission changes.
+- Financial actions.
+- Order state changes.
+- Reservation modifications.
+- Data exports.
+- Sensitive record access where required.
+
+Audit records should capture enough context to establish:
+
+```text
+who
+what
+when
+where/context
+result
+```
+
+Do not log sensitive payloads merely for convenience.
+
+---
+
+# 39. Deletion and Retention
+
+Every significant data category should have a defined lifecycle.
+
+Consider:
+
+```text
+Created
+↓
+Active
+↓
+Archived
+↓
+Deleted/Purged
+```
+
+Retention policies must be explicit.
+
+Do not retain data indefinitely without a reason.
+
+Do not permanently delete data that must remain available for legal, audit, or operational requirements.
+
+---
+
+# 40. Backup and Recovery
+
+Every production datastore must have a recovery strategy.
+
+Backups must consider:
+
+- Frequency.
+- Retention.
+- Encryption.
+- Storage isolation.
+- Recovery point objective.
+- Recovery time objective.
+- Restore testing.
+
+A backup that has never been restored should not be assumed to be reliable.
+
+Recovery procedures must be documented.
+
+---
+
+# 41. Disaster Recovery
+
+For critical data, define:
+
+- What happens if the primary database is unavailable.
+- What happens if a region becomes unavailable.
+- How replicas are promoted where applicable.
+- How application traffic is restored.
+- How data consistency is verified.
+- How recovery is validated.
+
+Do not design disaster recovery solely around infrastructure availability.
+
+Data correctness after recovery matters equally.
+
+---
+
+# 42. Database Observability
+
+Database systems must expose useful operational signals.
+
+Monitor where appropriate:
+
+- Query latency.
+- Error rates.
+- Connection pool usage.
+- Slow queries.
+- Lock contention.
+- Deadlocks.
+- CPU.
+- Memory.
+- Disk usage.
+- IOPS.
+- Replication lag.
+- Cache hit rate.
+- Index health.
+- Storage growth.
+
+Observability must help identify both failures and gradual degradation.
+
+---
+
+# 43. Logging
+
+Database logs must be useful without leaking sensitive data.
+
+Do not log:
+
+- Passwords.
+- Authentication tokens.
+- Secrets.
+- Full sensitive records.
+- Unnecessary personal information.
+
+Include useful context such as:
+
+- Request/correlation ID.
+- Tenant context where safe.
+- Operation.
+- Duration.
+- Outcome.
+
+Do not log entire SQL statements blindly if they may contain sensitive values.
+
+Prefer parameterized logging or sanitized query metadata.
+
+---
+
+# 44. ORM and Query Builders
+
+ORMs and query builders are tools, not substitutes for database understanding.
+
+Developers must understand the SQL or database operation generated by significant queries.
+
+Avoid:
+
+- Hidden N+1 behavior.
+- Accidental full-table scans.
+- Unbounded eager loading.
+- Excessive object hydration.
+- Generated queries that retrieve unnecessary fields.
+
+Use raw queries only when justified and keep them:
+
+- Parameterized.
+- Encapsulated.
+- Tested.
+- Documented where non-obvious.
+
+---
+
+# 45. Database Transactions in Application Code
+
+Transaction ownership should remain at the application/service boundary that understands the complete business operation.
+
+Avoid deeply nested functions independently starting transactions.
+
+Prefer:
+
+```text
+Application Service
+    ↓
+Transaction boundary
+    ↓
+Repository operations
+```
+
+rather than:
+
+```text
+Service A → transaction
+Service B → transaction
+Service C → transaction
+```
+
+without a clear composition model.
+
+---
+
+# 46. Repository Layer
+
+Repositories should expose domain-relevant operations rather than generic database mechanics.
+
+Prefer:
+
+```text
+FindActiveReservation(...)
+```
+
+over:
+
+```text
+FindWhere(...)
+```
+
+when the domain operation is meaningful and reusable.
+
+Repositories should not contain unrelated business workflows.
+
+Do not create repositories merely to wrap one trivial ORM call if the abstraction provides no architectural value.
+
+---
+
+# 47. Database Errors
+
+Database errors must be translated appropriately at application boundaries.
+
+Do not expose raw:
+
+- SQL errors.
+- Connection strings.
+- Table names.
+- Internal database details.
+
+Handle expected database conditions explicitly:
+
+- Duplicate key.
+- Not found.
+- Constraint violation.
+- Serialization failure.
+- Deadlock.
+- Timeout.
+- Connection failure.
+
+Retry only errors that are safe and appropriate to retry.
+
+---
+
+# 48. Deadlocks and Serialization Failures
+
+Concurrent transactions may fail due to:
+
+- Deadlocks.
+- Serialization conflicts.
+- Lock timeouts.
+
+Where the operation is safely retryable:
+
+1. Detect the specific failure.
+2. Roll back the transaction.
+3. Apply bounded retry policy.
+4. Add appropriate jitter/backoff.
+5. Preserve idempotency.
+6. Surface failure if retry budget is exhausted.
+
+Do not blindly retry every database error.
+
+---
+
+# 49. Schema and Application Compatibility
+
+During deployments, the application and database may temporarily run different versions.
+
+Database changes must account for rolling deployments.
+
+Prefer schemas that support:
+
+```text
+old application
++
+new application
+```
+
+during migration windows.
+
+Avoid changes that require every application instance to update atomically unless the deployment architecture explicitly guarantees this.
+
+---
+
+# 50. Seed Data
+
+Seed data must be clearly distinguished from production data.
+
+Seeds should be:
+
+- Deterministic where practical.
+- Idempotent.
+- Environment-aware.
+- Safe to rerun.
+
+Never overwrite production data accidentally through development seed logic.
+
+---
+
+# 51. Test Databases
+
+Database tests must use isolated environments.
+
+Tests must not depend on:
+
+- A developer's local database.
+- Production data.
+- Shared mutable test state.
+
+Database tests should verify:
+
+- Schema.
+- Constraints.
+- Transactions.
+- Queries.
+- Migrations.
+- Concurrency-sensitive behavior.
+- Failure cases.
+
+Use realistic datasets for performance-sensitive queries.
+
+---
+
+# 52. Migration Testing
+
+Every meaningful migration must be tested against representative existing data.
+
+Test:
+
+- Fresh database creation.
+- Upgrade from previous schema.
+- Existing data.
+- Large tables where relevant.
+- Constraints.
+- Indexes.
+- Application compatibility.
+- Rollout behavior.
+
+Do not assume a migration works merely because the migration tool accepts it.
+
+---
+
+# 53. Large Data Operations
+
+Large datasets must never be processed with an assumption that everything fits in memory.
+
+Prefer:
+
+- Streaming.
+- Pagination.
+- Chunking.
+- Batch processing.
+- Server-side filtering.
+- Incremental aggregation.
+
+Avoid loading millions of records into application memory merely to perform simple transformations that can be done incrementally.
+
+---
+
+# 54. Data Export
+
+Large exports must be bounded and controlled.
+
+Consider:
+
+- Streaming responses.
+- Background export jobs.
+- Object storage.
+- Progress tracking.
+- Authorization.
+- Rate limits.
+- Expiration.
+- Audit logging.
+
+Do not generate massive exports synchronously inside normal API requests.
+
+---
+
+# 55. Database Security
+
+Database credentials must:
+
+- Never be hardcoded.
+- Never be committed.
+- Never be exposed to frontend code.
+- Be supplied through secure configuration.
+- Follow least privilege.
+
+Production applications should not use database administrator credentials.
+
+Use separate credentials/roles where practical for:
+
+- Application runtime.
+- Migrations.
+- Read-only workloads.
+- Administrative operations.
+
+---
+
+# 56. Development and Production Separation
+
+Never point local development tooling at production databases unless explicitly authorized and protected.
+
+Development environments should use:
+
+- Separate credentials.
+- Separate databases.
+- Separate storage.
+- Appropriate test data.
+
+Production data must never be copied into development casually.
+
+Sensitive production data must be sanitized before use in non-production environments.
+
+---
+
+# 57. Database Configuration
+
+Database configuration must be centralized and validated.
+
+Configuration includes:
+
+- Connection strings.
+- Pool sizes.
+- Timeouts.
+- SSL/TLS settings.
+- Retry behavior.
+- Migration settings.
+
+Invalid database configuration must fail clearly during startup rather than producing obscure runtime failures.
+
+---
+
+# 58. Performance Review
+
+For significant database changes, review:
+
+### Query
+- Query complexity.
+- Query plan.
+- Returned rows.
+- Returned columns.
+
+### Indexes
+- Required indexes.
+- Duplicate indexes.
+- Write overhead.
+- Storage cost.
+
+### Transactions
+- Duration.
+- Locking.
+- Isolation.
+
+### Scale
+- Expected row count.
+- Growth rate.
+- Request frequency.
+
+### Failure
+- Timeout behavior.
+- Retry behavior.
+- Partial failure.
+
+### Operations
+- Migration safety.
+- Backup implications.
+- Monitoring.
+
+---
+
+# 59. Database Change Checklist
+
+Before completing a database-related change, verify:
+
+- [ ] Correct datastore selected.
+- [ ] Data ownership is clear.
+- [ ] Schema/model is appropriate.
+- [ ] Constraints are correct.
+- [ ] Relationships are explicit.
+- [ ] Indexes match actual queries.
+- [ ] No accidental N+1 queries.
+- [ ] Pagination is bounded.
+- [ ] Transaction boundaries are correct.
+- [ ] Concurrency behavior is safe.
+- [ ] Retry behavior is safe.
+- [ ] Idempotency is defined where required.
+- [ ] Tenant isolation is preserved.
+- [ ] Sensitive data is protected.
+- [ ] Migration is versioned and tested.
+- [ ] Backfill is safe if required.
+- [ ] Database errors are handled correctly.
+- [ ] Tests cover important invariants.
+- [ ] Performance implications were considered.
+- [ ] Observability is sufficient.
+- [ ] Documentation was updated.
+- [ ] Backup/recovery implications were considered for critical changes.
+
+---
+
+# 60. Final Database Principle
+
+A database is part of the system's correctness boundary.
+
+Every database decision must answer:
+
+```text
+Who owns this data?
+What guarantees must it provide?
+How is it queried?
+How does it scale?
+How does it fail?
+How does it recover?
+How does it evolve?
+How is it protected?
+```
+
+Prefer simple, explicit, measurable database designs over clever persistence abstractions.
+
+Optimize for:
+
+```text
+Correctness
+    ↓
+Integrity
+    ↓
+Consistency
+    ↓
+Performance
+    ↓
+Scalability
+    ↓
+Operability
+```
+
+Never sacrifice data correctness merely to make implementation easier.
