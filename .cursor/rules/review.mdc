@@ -1,0 +1,6 @@
+---
+description: Code-review checklist and completion guidance
+alwaysApply: false
+---
+
+Before completing a change, review correctness, architecture, security, performance, tests, documentation, and diff scope against `AGENTS.md`.

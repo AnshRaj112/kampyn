@@ -1,0 +1,42 @@
+---
+description: Core KAMPYN engineering rules that apply to every change
+alwaysApply: true
+---
+
+# Core Engineering Rules
+
+Follow `AGENTS.md` and the relevant policies in `.ai/`.
+
+Never:
+
+- duplicate existing functionality
+- introduce unnecessary abstractions
+- bypass established architecture
+- weaken type safety
+- ignore errors
+- commit secrets
+- introduce unexplained dependencies
+- modify unrelated files
+- leave broken tests
+- knowingly introduce quadratic algorithms where a better solution exists
+
+Before writing code:
+
+- inspect existing implementations
+- search for reusable utilities
+- understand the data flow
+- understand ownership of the code
+- identify affected tests
+
+Prefer:
+
+- composition
+- pure functions
+- immutable data where practical
+- explicit types
+- dependency inversion
+- small cohesive modules
+- deterministic behavior
+- testable business logic
+
+Production source files should normally remain under 200 lines.

@@ -1,0 +1,6 @@
+---
+description: API and contract guidance
+alwaysApply: false
+---
+
+Apply the repository's API validation, authorization, compatibility, error-model, and contract rules in `AGENTS.md` and the applicable `.ai/` policies.

@@ -1,0 +1,6 @@
+---
+description: Code quality and maintainability guidance
+alwaysApply: false
+---
+
+Follow the code-quality, type-safety, reuse, and cleanup rules in `AGENTS.md` and the applicable `.ai/` policies.

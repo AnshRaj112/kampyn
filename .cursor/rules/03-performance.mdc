@@ -1,0 +1,6 @@
+---
+description: Performance and scalability guidance
+alwaysApply: false
+---
+
+Follow the performance, complexity, query, and resource-usage rules in `AGENTS.md` and the applicable `.ai/` policies.

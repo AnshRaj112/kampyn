@@ -1,0 +1,6 @@
+---
+description: Database engineering guidance
+alwaysApply: false
+---
+
+Apply the repository's database, migration, transaction, indexing, and data-access rules in `AGENTS.md` and the applicable `.ai/` policies.

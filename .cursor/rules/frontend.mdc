@@ -1,0 +1,6 @@
+---
+description: Frontend-specific engineering guidance
+alwaysApply: false
+---
+
+Apply the repository's frontend conventions together with `AGENTS.md` and the applicable `.ai/` policies.

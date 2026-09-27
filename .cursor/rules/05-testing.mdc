@@ -1,0 +1,6 @@
+---
+description: Testing and verification guidance
+alwaysApply: false
+---
+
+Follow the testing, regression-coverage, formatting, linting, type-checking, and verification rules in `AGENTS.md` and the applicable `.ai/` policies.

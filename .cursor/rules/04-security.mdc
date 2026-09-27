@@ -1,0 +1,6 @@
+---
+description: Security and trust-boundary guidance
+alwaysApply: false
+---
+
+Follow the validation, authorization, secrets, tenant-isolation, and security rules in `AGENTS.md` and the applicable `.ai/` policies.

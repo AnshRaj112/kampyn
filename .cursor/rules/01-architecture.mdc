@@ -1,0 +1,6 @@
+---
+description: Architecture and dependency-direction guidance
+alwaysApply: false
+---
+
+Follow the architecture, dependency-direction, cohesion, and scope rules in `AGENTS.md` and the applicable `.ai/` policies.

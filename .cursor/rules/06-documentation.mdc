@@ -1,0 +1,6 @@
+---
+description: Documentation and architectural-decision guidance
+alwaysApply: false
+---
+
+Follow the documentation, public-contract, and architectural-decision rules in `AGENTS.md` and the applicable `.ai/` policies.

@@ -1,0 +1,6 @@
+---
+description: Backend-specific engineering guidance
+alwaysApply: false
+---
+
+Apply the repository's backend conventions together with `AGENTS.md` and the applicable `.ai/` policies.

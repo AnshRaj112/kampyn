@@ -1,0 +1,6 @@
+---
+description: Git and change-scope guidance
+alwaysApply: false
+---
+
+Keep commits and diffs focused, preserve unrelated work, and follow the Git and scope rules in `AGENTS.md`.
