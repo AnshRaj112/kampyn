@@ -604,41 +604,96 @@ Exceptions MUST be explicit, approved at the appropriate level, and consistent w
 
 Critical security, tenant isolation, and data integrity requirements MUST NOT be casually waived to satisfy a delivery deadline.
 
-## 27. Final Definition of Done Checklist
+# 27. Final Definition of Done Checklist
 
-{@body const sections = [
-  {title:"Requirements and architecture",items:["Requirements and acceptance criteria are clear","Relevant instructions and architecture have been reviewed","Domain ownership and dependencies are correct","Scope is controlled and unrelated changes are excluded"]},
-  {title:"Implementation and correctness",items:["Expected behavior is implemented","Business invariants and existing behavior are preserved","Errors, edge cases, and state transitions are handled","Code is readable, cohesive, and maintainable"]},
-  {title:"Security and data integrity",items:["Authentication and authorization are correct","Tenant isolation is preserved","Inputs, secrets, and sensitive data are protected","Persistence, concurrency, and consistency are safe"]},
-  {title:"Reliability and performance",items:["Failure and recovery paths are considered","Retries and idempotency are safe where applicable","Algorithms and resource usage are appropriate","Timeouts, cancellation, and cleanup are handled"]},
-  {title:"Verification and delivery",items:["Relevant tests and checks are run","Results and limitations are reported honestly","Observability and audit requirements are met","Documentation and compatibility are addressed","Final diff is reviewed and approvals are complete"]}
-]}
-{@body const [checked,setChecked] = DIL.useState([])}
-<box border radius="lg" padding={3} gap={3}>
-  <row align="center" justify="between">
-    **Task completion checklist**
-    <text color="secondary" size="sm" tabularNums>{checked.length} / {sections.reduce((n,s)=>n+s.items.length,0)} complete</text>
-  </row>
-  <box background="surface-tertiary" height="6px" radius="full" clip>
-    <box background="#16a34a" width={(checked.length/sections.reduce((n,s)=>n+s.items.length,0)*100)+"%"} height="6px" radius="full"/>
-  </box>
-  {#each sections as section,i}
-    <box gap={2}>
-      <text weight="semibold">{section.title}</text>
-      {#each section.items as item,j}
-        <checkbox checked={checked.includes(i+"-"+j)} onChange={v=>setChecked(prev=>v?[...prev,i+"-"+j]:prev.filter(x=>x!==i+"-"+j))}>{item}</checkbox>
-      {/each}
-    </box>
-    {#if i<sections.length-1}<divider/>{/if}
-  {/each}
-  {#if checked.length===sections.reduce((n,s)=>n+s.items.length,0)}
-    <badge color="success">All checklist items marked complete</badge>
-    <text color="secondary" size="xs">Confirm that each item has been verified and that any required approvals are complete before marking the task done.</text>
-  {/if}
-  <row justify="end">
-    <button size="sm" variant="outline" color="secondary" onClick={()=>setChecked([])}>Reset checklist</button>
-  </row>
-</box>
+A task is considered complete only when the relevant items below have been verified.
+
+## Requirements and Architecture
+
+- [ ] Requirements and acceptance criteria are clear.
+- [ ] Relevant project instructions, standards, and architecture have been reviewed.
+- [ ] Domain ownership and dependencies are correct.
+- [ ] The implementation remains within the defined scope.
+- [ ] Unrelated changes and unnecessary refactoring have been excluded.
+
+## Implementation and Correctness
+
+- [ ] Expected behavior is fully implemented.
+- [ ] Existing business invariants and required behavior are preserved.
+- [ ] Errors and edge cases are handled appropriately.
+- [ ] State transitions are correct and consistent.
+- [ ] Code is readable, cohesive, and maintainable.
+- [ ] The implementation follows established project conventions.
+
+## Security and Data Integrity
+
+- [ ] Authentication is correctly enforced where required.
+- [ ] Authorization and access control are correctly enforced.
+- [ ] Tenant or user data isolation is preserved where applicable.
+- [ ] Inputs are validated and safely handled.
+- [ ] Secrets and sensitive data are not exposed or improperly stored.
+- [ ] Persistence and data consistency are safe.
+- [ ] Concurrency-related behavior is considered where applicable.
+
+## Reliability and Performance
+
+- [ ] Failure and recovery paths have been considered.
+- [ ] Retries are safe and bounded where applicable.
+- [ ] Operations that may be retried are idempotent where required.
+- [ ] Algorithms and resource usage are appropriate for the expected workload.
+- [ ] Timeouts are configured where appropriate.
+- [ ] Cancellation is handled where applicable.
+- [ ] Resources, connections, listeners, and other temporary state are properly cleaned up.
+
+## Testing and Verification
+
+- [ ] Relevant unit tests are added or updated.
+- [ ] Relevant integration or end-to-end tests are added or updated where required.
+- [ ] Relevant linting, type-checking, formatting, and build checks have been run.
+- [ ] Tests cover important success, failure, and edge-case paths.
+- [ ] Verification results are reported accurately.
+- [ ] Known limitations or unverified areas are explicitly documented.
+- [ ] No test or verification result is claimed without actually running it.
+
+## Observability and Operations
+
+- [ ] Appropriate logging is present.
+- [ ] Errors can be diagnosed without exposing sensitive information.
+- [ ] Relevant metrics or tracing are implemented where required.
+- [ ] Audit requirements are satisfied where applicable.
+- [ ] Operational failure modes are observable.
+
+## Documentation and Compatibility
+
+- [ ] Relevant documentation has been updated.
+- [ ] API, configuration, environment, or schema changes are documented.
+- [ ] Backward compatibility has been considered.
+- [ ] Migration requirements have been addressed where applicable.
+- [ ] No required configuration or deployment steps are missing.
+
+## Final Review and Delivery
+
+- [ ] The final diff has been reviewed.
+- [ ] Only intended files and changes are included.
+- [ ] Temporary files, debugging code, commented-out experiments, and unnecessary artifacts have been removed.
+- [ ] Required approvals or reviews are complete.
+- [ ] The implementation satisfies the original acceptance criteria.
+- [ ] The task is ready for delivery.
+
+## Completion Rule
+
+A task must **not** be considered done merely because the implementation works locally.
+
+Before marking the task complete:
+
+1. Verify the applicable checklist items.
+2. Run the relevant automated checks.
+3. Review the final diff.
+4. Confirm that no known requirement has been skipped.
+5. Report any remaining limitations, risks, or unverified areas.
+6. Obtain required approvals before delivery.
+
+**Definition of Done:** The task is complete only when the implementation, verification, security, reliability, documentation, and delivery requirements applicable to the task have been satisfied.
 
 ## 28. Final Principle
 
